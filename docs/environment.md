@@ -29,21 +29,24 @@ metadata. The root file's comment has the whole account.
 
 ## Required
 
-`DATABASE_URL`, `BETTER_AUTH_SECRET`, `ALLOWED_SIGN_IN`. Everything else has a
-localhost default or is genuinely optional.
+`PRAMAAN_API_KEY` is the only value a person types. `DATABASE_URL` has a
+localhost default matching the compose Postgres, `BETTER_AUTH_SECRET` (and
+`AGENT_BRIDGE_SECRET`/`CRON_SECRET`) are generated into `.env` by `./start`,
+and `ALLOWED_SIGN_IN` is only consulted once a sign-in method exists —
+everything else has a localhost default or is genuinely optional.
 
-**`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`** are the sign-in button *and* the
-Gmail/Calendar sync — optional, so an SSO-only install needn't create a Google project,
-but **set together or not at all** (`packages/auth/src/env.ts` throws on one).
+**`GOOGLE_CLIENT_ID`** (and **`MICROSOFT_CLIENT_ID`** for Entra ID) are the sign-in
+buttons — optional, so an SSO-only install needn't create a provider project. The
+client **secret is not set here at all**: it belongs to the builder's connected
+sign-in account on the platform, which redeems the sign-in codes
+(`auth.social.exchange`) — this process never handles a provider token. Give the
+provider project the redirect URI `<API_URL>/api/auth/oauth2/callback/<provider>`.
+**`MICROSOFT_TENANT_ID`** defaults to `common` and is the only truly optional one —
+set it to your tenant's GUID to refuse other tenants at Microsoft instead of at
+`ALLOWED_SIGN_IN`. There is **no Microsoft equivalent of `hd`**: `tenantId` is the
+whole of it.
 
-**`MICROSOFT_CLIENT_ID` + `MICROSOFT_CLIENT_SECRET`** are the same bargain for Entra
-ID: the other sign-in button *and* the Outlook mail sync, one app registration, the
-same pair rule. **`MICROSOFT_TENANT_ID`** defaults to `common` and is the only one of
-the three that is genuinely optional on its own — set it to your tenant's GUID to
-refuse other tenants at Microsoft instead of at `ALLOWED_SIGN_IN`. There is **no
-Microsoft equivalent of `hd`**: `tenantId` is the whole of it.
-
-**Neither pair is required, but an install wants one of them or an SSO provider** —
+**No client id is required, but an install wants one of them or an SSO provider** —
 with none, the sign-in page says so by name rather than rendering nothing.
 
 **`ALLOWED_SIGN_IN`** — comma-separated whole domains or single addresses (bare
@@ -61,9 +64,9 @@ list fails closed.** Parsed on demand. `packages/auth/src/workspace.ts`.
   `bun --watch src/main.ts` refuses to watch outside its project directory and
   says so once at boot: `File ... is not in the project directory and will not be
   watched`. So a change to `packages/auth` or `packages/db` leaves the API
-  serving the old module until someone kills it. This cost an hour once: the
-  Slack OAuth scope list was correct in source and stale in the process, and
-  every reconnect kept asking Slack for the old scopes.
+  serving the old module until someone kills it. This cost an hour once: an
+  OAuth scope list was correct in source and stale in the process, and every
+  reconnect kept asking the provider for the old scopes.
   Running the API from the repo root fixes the watch and breaks Nest, which
   resolves its tsconfig paths from the current directory and then cannot build
   its dependency graph. There is no fix in the dev script today.
@@ -74,7 +77,7 @@ list fails closed.** Parsed on demand. `packages/auth/src/workspace.ts`.
   exist, and the provider rejects it with "redirect_uri did not match". This is
   invisible until someone sets `APP_URL` to a tunnel or a LAN host, at which
   point the redirect silently becomes that host. `ssoCallbackBase()` is the
-  pattern; `slackRedirectUri` in `auth.ts` once was not.
+  pattern; a redirect-uri helper in `auth.ts` once was not.
 - **`AUTH_COOKIE_DOMAIN`** only for API and app on different subdomains of one parent.
 - **`AGENT_URL`** is the agent's deployment, server-side only, and **must include the
   scheme** — validated at boot, or it throws when a task is queued instead.
@@ -114,6 +117,7 @@ what the platform serves.
 | `PRAMAAN_API_KEY` | Research, enrichment, picture storage, exchange rates, connected mailboxes |
 | `PRAMAAN_BASE_URL` | Only for a dev Pramaan API |
 | `PRAMAAN_STORAGE_BUCKET` | Where mirrored images land (default `crm`) |
+| `RESEARCH_MAX_TOKENS` | Ceiling per generation step, default 1024; whole number 64–8192 |
 | `AGENT_BRIDGE_SECRET` | The rep-facing Agent panel — see `agent.md` |
 
 ## Mailbox sync
@@ -152,27 +156,12 @@ feature is only ever wrong), **no `GOOGLE_WORKSPACE_DOMAIN`** (`ALLOWED_SIGN_IN`
 says who is internal — two sources is how a colleague becomes a lead), **no
 `GMAIL_BACKFILL_DAYS`**, **no `OUTLOOK_BACKFILL_DAYS`**, **no rate provider variable**.
 
-## Telemetry is on, and turning it off is one variable
+## No product analytics
 
-`CRM_TELEMETRY_DISABLED="1"` — or `DO_NOT_TRACK=1`, honoured identically — and nothing
-is sent. No client is constructed, so there is no queue waiting to flush later.
-
-- **Server side only**, `posthog-node` in the API and the agent. **`posthog-js`
-  appears once, on the `trycrm.ai` landing page**, and nowhere a record can be
-  reached: autocapture on a CRM would lift contact names and deal amounts out of
-  somebody else's database. That one import is gated on
-  `window.location.hostname`, not on `IS_MARKETING` — turning the landing page on
-  for your own domain never loads it. `docs/telemetry.md`.
-- **There is no variable for the destination.** The project key and host are
-  constants in `packages/telemetry/src/project.ts`. A `phc_` key is write-only —
-  it can send events and read nothing back — so making it configurable would
-  only imply it were a secret. Edit the constants to point somewhere else.
-- **The install ID is a row, not a file** — `install`, one row, UUID written by
-  the migration. Vercel's filesystem is ephemeral, so `~/.crm/telemetry-id`
-  would count containers.
-- Declared in `env.validation.ts` as optional, like everything else here. Every
-  event and the never-sent list are in **`docs/telemetry.md`**.
-
+This build ships no product analytics at all: no third-party telemetry, no error
+tracking, no install IDs. Errors surface in the server logs. If product analytics
+comes back, it should go through a platform capability, not a
+vendor key.
 ## Not env vars
 
 - **Cache TTL** — `DEFAULT_TTL_MS` (60s) in `cache.module.ts`; `CACHE_TTL_MS` overrides.

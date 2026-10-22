@@ -1,8 +1,6 @@
 "use client";
 
 import Warning from "@carbon/icons-react/es/Warning";
-import { authClient } from "@crm/auth/client";
-import { MICROSOFT_SYNC_SCOPES } from "@crm/auth/scopes";
 import { Alert, AlertDescription, AlertTitle } from "@crm/ui/components/alert";
 import {
 	AlertDialog,
@@ -35,12 +33,22 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ConnectionNotice } from "@/components/connections/connection-notice";
 import { LocalRelativeTime } from "@/components/local-date-time";
 import { isSyncing, SYNC_POLL_MS } from "@/lib/sync-status";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 
-const AUTO_CREATE = "Add the company and contact when you reply to someone new";
+const SOURCE_COPY = {
+	outlook: {
+		label: "Email",
+		autoCreate: "Add the company and contact when you reply to someone new",
+	},
+	outlook_calendar: {
+		label: "Meetings",
+		autoCreate: "Add the company and contact when you meet someone new",
+	},
+} as const;
 
 const CONNECT_ERRORS = new Map([
 	[
@@ -60,8 +68,10 @@ function MicrosoftUnavailable() {
 					</div>
 				</CardTitle>
 				<CardDescription>
-					Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET in the root .env
-					file and restart.
+					Set MICROSOFT_CLIENT_ID in the root .env file, connect the sign-in
+					account on the platform, and make sure PRAMAAN_API_KEY is set. The
+					sign-in code is exchanged through Pramaan — no client secret lives
+					here.
 				</CardDescription>
 			</CardHeader>
 		</Card>
@@ -75,6 +85,7 @@ function ConnectMicrosoft({
 	slug: string;
 	connectError?: string;
 }) {
+	const trpc = useTRPC();
 	const [pending, setPending] = useState(false);
 
 	function fail(message?: string) {
@@ -82,19 +93,27 @@ function ConnectMicrosoft({
 		toast.error(message ?? "Could not reach Microsoft.");
 	}
 
-	async function handleConnect() {
+	// The mailbox connects through the platform's hosted sign-in link: the API
+	// starts it, the browser goes there, and the connection comes back here.
+	const connect = useMutation(
+		trpc.microsoft.connect.mutationOptions({
+			onSuccess: (result) => {
+				if (result.connectUrl) {
+					window.location.assign(result.connectUrl);
+					return;
+				}
+				fail(result.error ?? undefined);
+			},
+			onError: (error) => fail(error.message),
+		}),
+	);
+
+	function handleConnect() {
 		setPending(true);
-
 		const origin = window.location.origin;
-
-		const { error } = await authClient.linkSocial({
-			provider: "microsoft",
-			scopes: [...MICROSOFT_SYNC_SCOPES],
-			callbackURL: `${origin}/${slug}/settings/connections/microsoft`,
-			errorCallbackURL: `${origin}/${slug}/settings/connections/microsoft?provider=microsoft`,
+		connect.mutate({
+			redirectUrl: `${origin}/${slug}/settings/connections/microsoft`,
 		});
-
-		if (error) fail(error.message);
 	}
 
 	return (
@@ -107,8 +126,8 @@ function ConnectMicrosoft({
 					</div>
 				</CardTitle>
 				<CardDescription>
-					Read-only Outlook mail. Only conversations with companies in the CRM
-					are stored.
+					Only conversations with companies in the CRM are stored.
+					<ConnectionNotice slug="microsoft" appName="Microsoft 365" />
 				</CardDescription>
 
 				<CardAction>
@@ -116,7 +135,7 @@ function ConnectMicrosoft({
 						size="sm"
 						disabled={pending}
 						onClick={() => {
-							handleConnect().catch(() => fail());
+							handleConnect();
 						}}
 						type="button"
 					>
@@ -286,9 +305,11 @@ export function MicrosoftConnection({
 							htmlFor={`auto-create-${source.source}`}
 							className="flex flex-col items-start gap-1"
 						>
-							<span className="text-sm">Email</span>
+							<span className="text-sm">
+								{SOURCE_COPY[source.source].label}
+							</span>
 							<span className="font-normal text-muted-foreground text-xs">
-								{AUTO_CREATE}
+								{SOURCE_COPY[source.source].autoCreate}
 							</span>
 						</Label>
 

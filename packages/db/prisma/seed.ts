@@ -385,6 +385,9 @@ async function seedCompanies(
 				city: company.city,
 				country: company.country,
 				countryCode: company.countryCode,
+				// Sample data is for looking at, not for spending the research
+				// budget on: mark it skipped so nothing sweeps it into the queue.
+				enrichmentStatus: "SKIPPED",
 				ownerId: pick(ownerIds),
 				createdAt: daysFromNow(-integer(30, 400), 12),
 			},

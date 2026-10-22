@@ -11,13 +11,12 @@ const fallback = (key: string, value: string) => {
 
 fallback(
 	"DATABASE_URL",
-	"postgresql://postgres:postgres@localhost:5432/crm?schema=public",
+	"postgresql://postgres:postgres@localhost:54329/crm?schema=public",
 );
 fallback("BETTER_AUTH_SECRET", "test-secret-at-least-32-characters-long");
 fallback("API_URL", "http://localhost:3001");
 fallback("ALLOWED_SIGN_IN", "example.com");
 fallback("GOOGLE_CLIENT_ID", "test-google-client-id");
-fallback("GOOGLE_CLIENT_SECRET", "test-google-client-secret");
 
 describe("Auth (e2e)", () => {
 	let app: INestApplication;
@@ -60,17 +59,14 @@ describe("Auth (e2e)", () => {
 			.get("/api/trpc/sso.signInOptions")
 			.expect(200);
 
-		const configured = (id?: string, secret?: string) => Boolean(id && secret);
+		const configured = (id?: string) => Boolean(id);
 
 		expect(response.body.result.data).toEqual({
-			google: configured(
-				process.env.GOOGLE_CLIENT_ID,
-				process.env.GOOGLE_CLIENT_SECRET,
-			),
-			microsoft: configured(
-				process.env.MICROSOFT_CLIENT_ID,
-				process.env.MICROSOFT_CLIENT_SECRET,
-			),
+			google: configured(process.env.GOOGLE_CLIENT_ID),
+			microsoft: configured(process.env.MICROSOFT_CLIENT_ID),
+			pramaanKeySet: configured(process.env.PRAMAAN_API_KEY),
+			appUrl: process.env.APP_URL ?? "http://localhost:3000",
+			managedAuthUrl: null,
 			providers: [],
 		});
 	});

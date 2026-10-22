@@ -5,7 +5,7 @@ import { focusOn } from "../lib/focus";
 
 export default defineTool({
 	description:
-		"Read everything the CRM already has on a contact: email threads with full message bodies, meetings, whether they have ever replied, their company and its id, the deals they are on, and who else we know at their company. Free, fast, and the best evidence there is — call it before paying for a lookup.",
+		"Read contact mail bodies, meetings, company, deals and colleagues before paying for outside lookup.",
 	inputSchema: z.object({
 		contactId: z.string(),
 		threads: z

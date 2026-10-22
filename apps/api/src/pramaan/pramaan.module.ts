@@ -1,10 +1,11 @@
 import { Global, Module } from "@nestjs/common";
+import { AppsRouter } from "./apps.router";
 import { AppsConnectionService } from "./apps-connection.service";
 import {
-	InjectPramaan,
-	PRAMAAN,
-	PramaanClientProvider,
-} from "./pramaan.constants";
+	CompanyLogosController,
+	LogoFilesController,
+} from "./logo-files.controller";
+import { PRAMAAN, PramaanClientProvider } from "./pramaan.constants";
 import { StorageController } from "./storage.controller";
 
 @Global()
@@ -17,8 +18,9 @@ import { StorageController } from "./storage.controller";
 			inject: [PramaanClientProvider],
 		},
 		AppsConnectionService,
+		AppsRouter,
 	],
-	controllers: [StorageController],
+	controllers: [StorageController, LogoFilesController, CompanyLogosController],
 	exports: [PRAMAAN, PramaanClientProvider, AppsConnectionService],
 })
 export class PramaanModule {}

@@ -11,8 +11,6 @@
 		"**/.next/**",
 		"**/.eve/**",
 		"**/.scratch/**",
-		".agents/**",
-		".claude/**",
 		"apps/api/src/generated/**",
 		"packages/pramaan/src/sdk/**",
 		"packages/db/src/generated/**",

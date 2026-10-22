@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# One command from a fresh clone: ./start
+#
+#   cp .env.example .env   # paste PRAMAAN_API_KEY into .env
+#   ./start
+#
+# What this does, in order:
+#   1. creates .env from .env.example if there is none;
+#   2. generates any missing local secret (session, agent bridge, cron) into
+#      .env — values are written, never printed;
+#   3. installs workspace dependencies (bun);
+#   4. starts the Postgres this repo owns (docker compose);
+#   5. applies migrations and generates the Prisma client (via `bun run dev`,
+#      whose dev:prepare step does both);
+#   6. runs the app, API and research agent in the foreground.
+#
+# With no PRAMAAN_API_KEY the product still starts: the sign-in page says
+# "Add PRAMAAN_API_KEY to .env", and every Pramaan-backed feature stays off.
+# Ctrl-C stops the three processes; the database keeps its data in the
+# `crm-postgres` volume (`docker compose down` stops it, `down -v` wipes it).
+# The bundled database is published on host port 54329 only: port 5432 may
+# belong to a Postgres the person already runs, and this product must never
+# migrate into that one.
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+# ── .env ─────────────────────────────────────────────────────────────────────
+if [ ! -f .env ]; then
+	cp .env.example .env
+	echo "Created .env from .env.example — paste your PRAMAAN_API_KEY into it, then run ./start again if you have one."
+fi
+
+# Fill one empty or absent KEY="" line in .env with a generated value.
+# Prints only the key name, never the value.
+ensure_secret() {
+	local key="$1"
+	if grep -Eq "^${key}=\"?.{16,}\"?" .env; then
+		return 0
+	fi
+	local value
+	value="$(openssl rand -base64 32 | tr -d '\n')"
+	export START_SECRET_VALUE="$value"
+	export START_SECRET_KEY="$key"
+	perl -pi -e 's/^#? ?\Q$ENV{START_SECRET_KEY}\E=.*/$ENV{START_SECRET_KEY}="$ENV{START_SECRET_VALUE}"/' .env
+	if ! grep -Eq "^${key}=" .env; then
+		printf '%s="%s"\n' "$key" "$value" >> .env
+	fi
+	unset START_SECRET_VALUE START_SECRET_KEY
+	echo "Generated ${key} into .env (value not shown)."
+}
+
+ensure_secret BETTER_AUTH_SECRET
+ensure_secret AGENT_BRIDGE_SECRET
+ensure_secret CRON_SECRET
+
+# The one typed value. Missing is not fatal: the app boots and says so.
+if grep -Eq '^PRAMAAN_API_KEY="[^"]+"' .env; then
+	:
+else
+	echo "Add PRAMAAN_API_KEY to .env — starting without it; enrichment, research and connected apps stay off."
+fi
+
+# ── Dependencies ─────────────────────────────────────────────────────────────
+# No DATABASE_URL export here: with a key, the API boots on the managed
+# database when the platform can serve one and falls back to the bundled local
+# Postgres with one plain line; the Prisma config already defaults to the
+# bundled database for install-time steps.
+if [ ! -d node_modules ]; then
+	echo "Installing dependencies…"
+	bun install
+fi
+
+# ── Database (skipped when DATABASE_URL points somewhere else) ──────────────
+DB_URL="$(grep -E '^DATABASE_URL=' .env | head -1 | sed -E 's/^DATABASE_URL="?//; s/"$//' || true)"
+if [ -n "$DB_URL" ] && ! printf '%s' "$DB_URL" | grep -q 'localhost:54329/crm'; then
+	echo "DATABASE_URL points at your own Postgres — leaving Docker alone."
+elif docker compose ps --status running postgres 2>/dev/null | grep -q postgres \
+	|| [ "$(docker inspect -f '{{.State.Running}}' crm-postgres 2>/dev/null || true)" = "true" ]; then
+	# Our container (this clone's, or an earlier clone's under the same fixed
+	# name): it serves this product's database on 54329, so reuse it.
+	echo "Postgres is already running."
+else
+	# If something else already answers on 54329, Docker cannot publish the
+	# bundled database there — say so plainly instead of letting migrations
+	# land in whatever that something is.
+	if (exec 3<>/dev/tcp/127.0.0.1/54329) 2>/dev/null; then
+		exec 3>&- 3<&-
+		echo "Port 54329 is already in use by something that is not this product's database. Stop it, or set DATABASE_URL in .env to a Postgres of your own, then run ./start again." >&2
+		exit 1
+	fi
+	echo "Starting Postgres…"
+	docker compose up -d --wait postgres
+fi
+
+# ── Run ──────────────────────────────────────────────────────────────────────
+# ./start --prod serves a production build instead of dev (faster pages, no
+# on-the-fly compilation). Builds once, then runs the API and web app with
+# NODE_ENV=production; the research agent stays as its own process.
+if [ "${1:-}" = "--prod" ] || [ "${PROD:-}" = "1" ]; then
+	echo "Building the production bundle…"
+	bun run build
+	echo "Starting in production mode — open http://localhost:3000"
+	NODE_ENV=production bun apps/agent/scripts/start.ts &
+	AGENT_PID=$!
+	NODE_ENV=production bun apps/api/src/main.ts &
+	API_PID=$!
+	(cd apps/app && bunx next start -p 3000) &
+	WEB_PID=$!
+	trap 'kill $AGENT_PID $API_PID $WEB_PID 2>/dev/null' EXIT INT TERM
+	wait
+fi
+
+echo "Starting the CRM — open http://localhost:3000"
+exec bun run dev

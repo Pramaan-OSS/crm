@@ -29,31 +29,10 @@ That is the shape of every match: say where to look, never what you will find.
    have ever replied to us from that address, you already have the strongest
    evidence available anywhere — `crm.thread-reply` — and a signature block may
    hand you their title as well. Start every match here, not at a search engine.
-1. **`resolve_linkedin_profile`** when the record holds no LinkedIn URL. Pass the
-   email, the company name and domain, and any first and last name the CRM has.
-   It returns one candidate and a verdict. A candidate is a lead, not an answer.
-2. **`get_linkedin_profile`** when the record already holds a LinkedIn URL, or to
-   check a candidate at a different URL. Pass the email, company name
-   and domain — **and the `contactId`**. It returns the profile, their full work
-   history *and a verdict*, in one lookup. Passing the id is what lets it copy
-   their photograph, which it does only if the verdict comes back positive, in
-   code, without asking you. Leaving it out costs the contact their picture and
-   saves nothing.
-
-   Both calls cost the same, and they are the most expensive you have. Two or
-   three lookups is the whole budget for a contact, so do not run both when one
-   answers. A record with a LinkedIn URL needs step 2 only.
-3. **Read the verdict, not the profile.** It checks three things:
-   - `emailMatches` — the profile lists the address we are identifying.
-   - `employerMatches` — a current position matches the company we have.
-   - `nameMatches` — the real name is consistent with the email local part
-     (`y` + `okonkwo` → Tomi Okonkwo).
-4. **`emailMatches` settles it on its own.** The person put that address on their
-   own profile. Nothing else you can observe is stronger.
-5. **Otherwise both, or it is not them.** One of the other two is not a weaker
-   match, it is a different person who happens to share something.
-6. If no candidate passes, **stop**. Leaving "Pmarchetti" in the CRM is the correct
-   outcome when you do not know.
+1. Use `resolve_linkedin_profile` for a bare email, or `get_linkedin_profile` for an existing profile. Show the returned estimate and ask the person before confirming the exact plan. Never confirm a plan on their behalf.
+2. Read `samePerson` and its `matchedKeys`, `conflictingKeys` and evidence. Only `same` with independently returned matching keys and no conflicts can establish identity. Names, employer similarity and lookup keys echoed back do not count.
+3. `unsure` and `different` must not merge records, verify an identity, or trigger a portrait write. Keep possible candidates for review. Missing or partial checks are not proof of sameness.
+4. The email resolver currently cannot return `same`: its profile URL is echoed by the follow-up read. Do not promote that echo into evidence.
 
 Somebody whose LinkedIn URL is **already on the record** has been through all of
 this before. Do not re-run it to get a picture — `fetch_contact_photo` is one
@@ -66,7 +45,7 @@ Call `identify_contact` with what you actually saw:
 | What you have | Evidence to record | What happens |
 | --- | --- | --- |
 | `emailMatches` is true | `profile.email-match` | Written to the record. |
-| Employer and name both pass | `linkedin.employer-and-name` | Written to the record. |
+| Employer and name both pass without independent keys | `employer-only` | Suggestion only; never a verified identity. |
 | They replied from that address | `crm.thread-reply` | Written to the record. |
 | One check passes | `employer-only`, or the profile as `search.cites-profile` | Offered to a rep as a suggestion. |
 | Sources disagree | add a `contradiction` entry | Held. Nobody is shown a guess. |
@@ -90,7 +69,7 @@ Do not add evidence you did not observe to push a claim over a line.
   Seattle — all with total confidence.
 - **A matching first name.** Half the Chrises at a company are not your Chris.
   The surname or the employer has to carry it.
-- **Perplexity's view of somebody's job title.** It aggregates stale sources; it
+- **A research answer's view of somebody's job title.** Search-backed answers aggregate stale sources; they
   said "Account Executive L3" for a profile that reads "Growth Specialist at
   Fernhill". For identity, the person's own profile wins.
 - **A very plausible expansion.** `jsmith` is probably J. Smith. Probably is not

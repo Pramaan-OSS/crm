@@ -95,9 +95,16 @@ export const CATALOG = {
 		mode: "sync",
 		needsConnection: false,
 	},
-	"llm.models.list": {
-		id: "llm.models.list",
-		description: "List model handles and documented limits.",
+	"apps.catalog.search": {
+		id: "apps.catalog.search",
+		description: "Discover one page of connected-app actions.",
+		effectClass: "read_only",
+		mode: "sync",
+		needsConnection: false,
+	},
+	"document.parse": {
+		id: "document.parse",
+		description: "Read a platform file as text.",
 		effectClass: "read_only",
 		mode: "sync",
 		needsConnection: false,
@@ -152,6 +159,75 @@ export const CATALOG = {
 		id: "email.send",
 		description: "Send an email.",
 		effectClass: "external_irreversible",
+		mode: "sync",
+		needsConnection: false,
+	},
+	"auth.backend.provision": {
+		id: "auth.backend.provision",
+		description:
+			"Open a managed sign-in backend for your app, with no auth account of your own; calling again returns the same one.",
+		effectClass: "external_reversible",
+		mode: "sync",
+		needsConnection: false,
+	},
+	"auth.backend.get": {
+		id: "auth.backend.get",
+		description:
+			"Read the status and settings of your app's managed sign-in backend: its URLs, social providers and allowed domains.",
+		effectClass: "read_only",
+		mode: "sync",
+		needsConnection: true,
+	},
+	"auth.backend.domains.set": {
+		id: "auth.backend.domains.set",
+		description:
+			"Set the origins users may be sent back to after signing in on your app's managed sign-in backend (replaces the list).",
+		effectClass: "external_reversible",
+		mode: "sync",
+		needsConnection: true,
+	},
+	"auth.token.verify": {
+		id: "auth.token.verify",
+		description:
+			"Check a signed-in user's session token against your auth system's public keys; returns who it is for.",
+		effectClass: "read_only",
+		mode: "sync",
+		needsConnection: true,
+	},
+	"auth.user.get": {
+		id: "auth.user.get",
+		description: "Get one user of your managed sign-in backend by id.",
+		effectClass: "read_only",
+		mode: "sync",
+		needsConnection: true,
+	},
+	"auth.users.list": {
+		id: "auth.users.list",
+		description: "List the users of your managed sign-in backend, matching email or name.",
+		effectClass: "read_only",
+		mode: "sync",
+		needsConnection: true,
+	},
+	"auth.user.delete": {
+		id: "auth.user.delete",
+		description: "Delete one user of your managed sign-in backend, permanently.",
+		effectClass: "external_irreversible",
+		mode: "sync",
+		needsConnection: true,
+	},
+	"db.postgres.provision": {
+		id: "db.postgres.provision",
+		description:
+			"Open or restore your project's managed Postgres database. Connection addresses are shown once when created; a new key returns an existing database without secrets.",
+		effectClass: "external_reversible",
+		mode: "sync",
+		needsConnection: false,
+	},
+	"db.postgres.get": {
+		id: "db.postgres.get",
+		description:
+			"Get the state and limits of your project's managed Postgres database; never returns a connection address or password.",
+		effectClass: "read_only",
 		mode: "sync",
 		needsConnection: false,
 	},

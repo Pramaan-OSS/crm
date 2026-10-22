@@ -1,4 +1,3 @@
-import { bumpCounter, COUNTERS } from "@crm/telemetry";
 import { defineState } from "eve/context";
 
 export const focus = defineState("crm.focus", () => ({
@@ -9,12 +8,14 @@ export const focus = defineState("crm.focus", () => ({
 	spent: 0,
 	budget: 4,
 	exhausted: false,
+	fresh: false,
 }));
 
 export type CurrentFocus = {
 	contactId: string | null;
 	sessionId: string | null;
 	taskKind: string | null;
+	fresh: boolean;
 };
 
 export function currentFocus(): CurrentFocus {
@@ -24,9 +25,24 @@ export function currentFocus(): CurrentFocus {
 			contactId: state.contactId,
 			sessionId: state.sessionId,
 			taskKind: state.taskKind,
+			fresh: state.fresh,
 		};
 	} catch {
-		return { contactId: null, sessionId: null, taskKind: null };
+		return {
+			contactId: null,
+			sessionId: null,
+			taskKind: null,
+			fresh: false,
+		};
+	}
+}
+
+/** Person-started runs may bypass the platform's answer copy; background runs may not. */
+export function currentFresh(): boolean {
+	try {
+		return focus.get().fresh === true;
+	} catch {
+		return false;
 	}
 }
 
@@ -35,6 +51,7 @@ export function focusOn(input: {
 	companyId?: string | null;
 	sessionId?: string | null;
 	taskKind?: string | null;
+	fresh?: boolean;
 }): void {
 	focus.update((current) => ({
 		...current,
@@ -42,6 +59,7 @@ export function focusOn(input: {
 		companyId: input.companyId ?? current.companyId,
 		sessionId: input.sessionId ?? current.sessionId,
 		taskKind: input.taskKind ?? current.taskKind,
+		fresh: input.fresh ?? current.fresh,
 	}));
 }
 
@@ -51,7 +69,6 @@ export function spend(units = 1): { ok: true } | { ok: false; reason: string } {
 	if (spent + units > budget) {
 		if (!exhausted) {
 			focus.update((current) => ({ ...current, exhausted: true }));
-			void bumpCounter(COUNTERS.budgetExhausted);
 		}
 
 		return {

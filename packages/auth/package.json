@@ -8,6 +8,7 @@
 		"./client": "./src/client.ts",
 		"./cookies": "./src/cookies.ts",
 		"./scopes": "./src/scopes.ts",
+		"./social-exchange": "./src/social-exchange.ts",
 		"./workspace": "./src/workspace.ts"
 	},
 	"scripts": {
@@ -22,6 +23,7 @@
 		"@better-auth/sso": "1.6.25",
 		"@crm/db": "workspace:*",
 		"@crm/env": "workspace:*",
+		"@crm/pramaan": "workspace:*",
 		"@crm/validation": "workspace:*",
 		"better-auth": "^1.6.25",
 		"zod": "^4.4.3"

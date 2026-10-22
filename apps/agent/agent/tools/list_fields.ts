@@ -4,7 +4,7 @@ import { listFields } from "../lib/fields";
 
 export default defineTool({
 	description:
-		"List the custom fields a workspace has added to companies, contacts or deals — their key, type, options, and the brief saying what would count as an answer. Free. Read this before setting any custom value, and before telling a rep a field does not exist.",
+		"Read custom-field keys, types, options and evidence briefs before setting values or claiming a field is absent.",
 	inputSchema: z.object({
 		entity: z
 			.enum(["COMPANY", "CONTACT", "DEAL"])

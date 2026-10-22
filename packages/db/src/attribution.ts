@@ -62,7 +62,6 @@ const SOCIAL = {
 	"news.ycombinator.": "Hacker News",
 	"producthunt.": "Product Hunt",
 	"github.": "GitHub",
-	"slack.": "Slack",
 } satisfies Record<string, string>;
 
 const MAIL = {

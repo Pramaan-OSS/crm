@@ -185,6 +185,54 @@ export namespace Caps {
 		readonly content: string;
 	}
 
+	export interface LlmToolCall {
+		/** Neutral call id from a prior turn; echoed unchanged with its result. */
+		readonly id: string;
+		readonly name: string;
+		readonly arguments: Record<string, unknown>;
+	}
+
+	export type LlmChatMessage =
+		| { readonly role: "system" | "user"; readonly content: string }
+		| {
+				readonly role: "assistant";
+				readonly content?: string;
+				readonly toolCalls?: ReadonlyArray<LlmToolCall>;
+		  }
+		| {
+				readonly role: "tool";
+				readonly toolCallId: string;
+				readonly content: string;
+		  };
+
+	export interface LlmChatTool {
+		readonly name: string;
+		readonly description?: string;
+		/** JSON Schema for the tool's arguments. */
+		readonly parameters: Record<string, unknown>;
+	}
+
+	export interface LlmChatRequest {
+		/** Conversation oldest first; every tool call answered exactly once before the next turn. */
+		readonly messages: ReadonlyArray<LlmChatMessage>;
+		readonly tools?: ReadonlyArray<LlmChatTool>;
+		readonly model?: "fast" | "balanced" | "best";
+		readonly maxTokens?: number;
+		readonly temperature?: number;
+		/** JSON Schema for structured output. */
+		readonly jsonSchema?: Record<string, unknown>;
+	}
+
+	export interface LlmChatResult {
+		readonly text?: string;
+		readonly toolCalls: ReadonlyArray<LlmToolCall>;
+		readonly finishReason: "stop" | "tool_calls" | "length" | "other";
+		readonly usage: {
+			readonly inputTokens: number;
+			readonly outputTokens: number;
+		};
+	}
+
 	export interface LlmCompleteRequest {
 		readonly messages: ReadonlyArray<LlmMessage>;
 		readonly model?: "fast" | "balanced" | "best";
@@ -201,23 +249,29 @@ export namespace Caps {
 		};
 	}
 
-	export interface LlmModelsListRequest {
-		readonly limit?: number;
-		readonly tier?: "fast" | "balanced" | "best";
+	export interface AppsCatalogSearchRequest {
+		readonly query: string;
+		readonly app?: string;
 		readonly cursor?: string;
+		readonly limit?: number;
 	}
-
-	export interface LlmModelsListResult {
+	export interface AppsCatalogSearchResult {
 		readonly results: ReadonlyArray<{
-			readonly ref?: string;
-			readonly tier?: "fast" | "balanced" | "best";
-			readonly contextTokens: number;
-			readonly maxOutputTokens?: number;
-			readonly features: ReadonlyArray<
-				"temperature" | "structured" | "tools" | "streaming"
-			>;
+			readonly app: string;
+			readonly action: string;
+			readonly readOnly?: true;
+			readonly description?: string;
+			readonly inputSchema?: unknown;
 		}>;
 		readonly nextCursor?: string;
+	}
+	export interface DocumentParseRequest {
+		readonly fileId: string;
+		readonly ocr?: boolean;
+	}
+	export interface DocumentParseResult {
+		readonly text: string;
+		readonly truncated: boolean;
 	}
 
 	// ── storage ────────────────────────────────────────────────────────────────
@@ -298,6 +352,136 @@ export namespace Caps {
 		readonly output: JsonValue;
 		readonly error?: string;
 		readonly truncated?: true;
+	}
+
+	// ── auth ───────────────────────────────────────────────────────────────────
+
+	export interface AuthSocialExchangeRequest {
+		/** Sign-in product key, e.g. "google" or "microsoft". */
+		readonly providerKey: string;
+		/** Single-use authorization code returned to the app. */
+		readonly code: string;
+		/** Exact redirect URL used when requesting the code (https, or http on localhost). */
+		readonly redirectUri: string;
+		readonly pkceVerifier?: string;
+		readonly expectedNonce?: string;
+	}
+
+	export interface AuthSocialExchangeResult {
+		readonly providerKey: string;
+		readonly subjectId: string;
+		readonly email?: string;
+		readonly emailVerified?: boolean;
+		readonly displayName?: string;
+		/** Short-lived picture link on platform file storage, when available. */
+		readonly pictureUrl?: string;
+	}
+
+	/** Opens (or returns) the managed sign-in backend. No input, idempotent. */
+	export interface AuthBackendProvisionResult {
+		readonly status: "ready";
+		/** Base URL of the managed sign-in backend; the sign-in client points here. */
+		readonly authUrl: string;
+		/** Public signing keys of the backend, for checking session tokens. */
+		readonly jwksUrl: string;
+	}
+
+	export interface AuthBackendGetResult {
+		readonly status: "ready" | "transferred";
+		readonly authUrl: string;
+		readonly jwksUrl: string;
+		readonly socialProviders?: ReadonlyArray<{
+			readonly provider: string;
+			readonly credentials: "shared" | "own";
+		}>;
+		readonly allowedDomains?: ReadonlyArray<string>;
+	}
+
+	export interface AuthBackendDomainsSetRequest {
+		/** The whole list of allowed return origins, up to 20; origins left out are removed. */
+		readonly domains: ReadonlyArray<string>;
+	}
+
+	export interface AuthBackendDomainsSetResult {
+		readonly domains: ReadonlyArray<{ readonly domain: string }>;
+	}
+
+	export interface AuthTokenVerifyRequest {
+		/** The session token (a signed JWT) sent by the signed-in user's browser or app. */
+		readonly token: string;
+		readonly audience?: string;
+		/** Allowed origins for the azp claim (the page that requested the token), 1 to 20. */
+		readonly authorizedParties?: ReadonlyArray<string>;
+	}
+
+	export interface AuthTokenVerifyResult {
+		/** True when the token is genuine, unexpired and passes the checks. */
+		readonly valid: boolean;
+		readonly userId?: string;
+		readonly sessionId?: string;
+		readonly orgId?: string;
+		readonly expiresAt?: string;
+	}
+
+	export interface AuthUserGetRequest {
+		readonly userId: string;
+	}
+
+	export interface AuthUserGetResult {
+		readonly userId: string;
+		readonly email?: string;
+		readonly emailVerified?: boolean;
+		readonly name?: string;
+		readonly imageUrl?: string;
+		readonly createdAt?: string;
+		readonly lastSignInAt?: string;
+		readonly banned?: boolean;
+	}
+
+	export interface AuthUsersListRequest {
+		/** Matches email or name. */
+		readonly query?: string;
+		readonly limit?: number;
+		readonly cursor?: string;
+	}
+
+	export interface AuthUsersListResult {
+		readonly results: ReadonlyArray<{
+			readonly userId: string;
+			readonly email?: string;
+			readonly emailVerified?: boolean;
+			readonly name?: string;
+			readonly imageUrl?: string;
+			readonly createdAt?: string;
+			readonly lastSignInAt?: string;
+			readonly banned?: boolean;
+		}>;
+		readonly nextCursor?: string;
+	}
+
+	export interface AuthUserDeleteRequest {
+		readonly userId: string;
+		readonly confirm: true;
+	}
+
+	export interface AuthUserDeleteResult {
+		readonly deleted: true;
+	}
+
+	// ── db.postgres ────────────────────────────────────────────────────────────
+
+	export interface DbPostgresProvisionResult {
+		readonly status: "ready" | "paused" | "transferred" | "held";
+		/** True only when this call creates or restores the database and returns addresses. */
+		readonly created: boolean;
+		/** Pooled connection address; present only when created. Never log it. */
+		readonly connectionString?: string;
+		/** Direct connection address for migrations; present only when created. Never log it. */
+		readonly directConnectionString?: string;
+	}
+
+	export interface DbPostgresGetResult {
+		readonly status: "ready" | "paused" | "transferred" | "held";
 	}
 
 	// ── email ──────────────────────────────────────────────────────────────────

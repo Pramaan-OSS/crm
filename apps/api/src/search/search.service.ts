@@ -1,3 +1,4 @@
+import { companyLogoProps } from "@crm/db/images";
 import type { Db } from "@crm/db";
 import { Injectable } from "@nestjs/common";
 import { InjectDatabase } from "../database/database.constants";
@@ -37,6 +38,8 @@ export class SearchService {
 					id: true,
 					name: true,
 					domain: true,
+					logoUrl: true,
+					logoDarkUrl: true,
 					iconUrl: true,
 					iconDarkUrl: true,
 					iconTone: true,
@@ -71,6 +74,8 @@ export class SearchService {
 					company: {
 						select: {
 							name: true,
+							logoUrl: true,
+							logoDarkUrl: true,
 							iconUrl: true,
 							iconDarkUrl: true,
 							iconTone: true,
@@ -88,9 +93,9 @@ export class SearchService {
 						id: company.id,
 						label: company.name,
 						detail: company.domain,
-						iconUrl: company.iconUrl,
-						iconDarkUrl: company.iconDarkUrl,
-						iconTone: company.iconTone,
+						iconUrl: companyLogoProps(company).src,
+						iconDarkUrl: companyLogoProps(company).darkSrc,
+						iconTone: companyLogoProps(company).tone,
 						imageUrl: null,
 					}),
 				),
@@ -114,9 +119,9 @@ export class SearchService {
 						id: deal.id,
 						label: deal.name,
 						detail: deal.company.name,
-						iconUrl: deal.company.iconUrl,
-						iconDarkUrl: deal.company.iconDarkUrl,
-						iconTone: deal.company.iconTone,
+						iconUrl: companyLogoProps(deal.company).src,
+						iconDarkUrl: companyLogoProps(deal.company).darkSrc,
+						iconTone: companyLogoProps(deal.company).tone,
 						imageUrl: null,
 					}),
 				),

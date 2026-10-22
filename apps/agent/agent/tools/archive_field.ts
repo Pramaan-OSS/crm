@@ -5,7 +5,7 @@ import { archiveField } from "../lib/fields";
 
 export default defineTool({
 	description:
-		"Archive a custom field. It leaves every sheet and table and stops being filled; the values already recorded are kept. A schema change every rep will see, so it needs a person.",
+		"Archive a custom field, retaining recorded values. Requires human approval.",
 	inputSchema: z.object({
 		entity: z.enum(["COMPANY", "CONTACT", "DEAL"]),
 		key: z.string().describe("The field's key, as list_fields reports it."),

@@ -1,4 +1,3 @@
-import { apiError } from "@crm/telemetry";
 import {
 	type ArgumentsHost,
 	Catch,
@@ -53,7 +52,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
 				exception instanceof Error ? exception.stack : undefined,
 			);
 
-			apiError({ error: exception, route: routePattern(request), status });
 			return;
 		}
 

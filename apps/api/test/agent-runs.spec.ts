@@ -472,9 +472,9 @@ describe("cancelling a run", () => {
 				{
 					agentId,
 					runId,
-					type: "slack.message.post",
-					provider: "slack",
-					summary: "Already posted",
+					type: "email.send",
+					provider: "email",
+					summary: "Already sent",
 					status: "SUCCEEDED",
 					idempotencyKey: `${runId}:done`,
 					requestHash: "done",

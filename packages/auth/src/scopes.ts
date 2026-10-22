@@ -1,7 +1,5 @@
 export const GOOGLE_PROVIDER_ID = "google";
 export const MICROSOFT_PROVIDER_ID = "microsoft";
-export const SLACK_PROVIDER_ID = "slack";
-
 export const MAILBOX_PROVIDER_IDS = [
 	GOOGLE_PROVIDER_ID,
 	MICROSOFT_PROVIDER_ID,

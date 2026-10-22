@@ -1,6 +1,13 @@
 import { isGoogleConfigured } from "@crm/auth";
 import type { Db, Prisma } from "@crm/db";
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+	forwardRef,
+	Inject,
+	Injectable,
+	Logger,
+	NotFoundException,
+	Optional,
+} from "@nestjs/common";
 import { normalizeDomain } from "../companies/domain";
 import { ActivityStampService } from "../crm/activity-stamp.service";
 import { InjectDatabase } from "../database/database.constants";
@@ -13,6 +20,10 @@ import {
 	APP_GOOGLE_CALENDAR,
 	AppsConnectionService,
 } from "../pramaan/apps-connection.service";
+import {
+	MAILBOX_SYNC,
+	type MailboxSyncRunner,
+} from "../sync/mailbox-sync.token";
 import {
 	GOOGLE_PROVIDER_ID,
 	GOOGLE_SYNC_SOURCES,
@@ -41,6 +52,9 @@ export class GoogleConnectionService {
 		private readonly state: SyncStateService,
 		private readonly match: MailboxMatchService,
 		private readonly stamp: ActivityStampService,
+		@Optional()
+		@Inject(MAILBOX_SYNC)
+		private readonly mailboxSync?: MailboxSyncRunner,
 	) {}
 
 	async status(userId: string): Promise<GoogleConnectionStatus> {
@@ -102,6 +116,9 @@ export class GoogleConnectionService {
 
 		if (added.length > 0) {
 			this.logger.log({ message: "Google connected", userId, sources: added });
+			// A rep just connected: sync their mail and calendar right away
+			// instead of waiting for the next scheduled sweep.
+			void this.mailboxSync?.runForUser(userId).catch(() => {});
 		}
 	}
 

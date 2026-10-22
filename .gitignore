@@ -37,11 +37,6 @@ yarn-error.log*
 .DS_Store
 *.pem
 
-# Agent worktrees
-.claude/worktrees/
-
-# Skills are installed to .agents/skills; .claude/skills mirrors them per-tool
-.claude/skills/
 
 # eve build output
 .eve
@@ -50,3 +45,6 @@ yarn-error.log*
 
 # Agent scratch files
 .scratch/
+
+# Local test-run artifacts
+.runtime/

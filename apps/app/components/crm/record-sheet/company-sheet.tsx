@@ -1,5 +1,6 @@
 "use client";
 
+import { companyLogoProps } from "@crm/db/images";
 import Add from "@carbon/icons-react/es/Add";
 import Partnership from "@carbon/icons-react/es/Partnership";
 import Star from "@carbon/icons-react/es/Star";
@@ -8,10 +9,7 @@ import UserMultiple from "@carbon/icons-react/es/UserMultiple";
 import type { FieldValueJson } from "@crm/db/fields";
 import { Button } from "@crm/ui/components/button";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
-import {
-	EntityLogo,
-	type EntityLogoTone,
-} from "@crm/ui/components/entity-logo";
+import { EntityLogo } from "@crm/ui/components/entity-logo";
 import { Icon } from "@crm/ui/components/icon";
 import { PersonAvatar } from "@crm/ui/components/person-avatar";
 import { SimpleTable, SimpleTableRow } from "@crm/ui/components/simple-table";
@@ -60,6 +58,7 @@ import { hasCompanyLinks } from "@/lib/social-links";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
+import { useResearchStatus } from "@/lib/use-research-status";
 import { QuickAddContact, QuickAddDeal } from "./quick-add";
 import { RecordActions } from "./record-actions";
 import {
@@ -132,6 +131,7 @@ function nextClose(deals: CompanyDeal[]): string | null {
 
 export function CompanySheet({ companyId }: { companyId: string }) {
 	const trpc = useTRPC();
+	const research = useResearchStatus();
 	const {
 		tab,
 		setTab,
@@ -142,6 +142,7 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 	const query = useQuery({
 		...trpc.companies.byId.queryOptions({ id: companyId }),
 		refetchInterval: (current) => {
+			if (!research.runnable) return false;
 			const record = current.state.data;
 			return record && isEnriching(record.enrichmentStatus, record.queued)
 				? ENRICHMENT_POLL_MS
@@ -173,7 +174,13 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 				{
 					value: "overview",
 					label: "Overview",
-					content: <CompanyOverview company={company} />,
+					content: (
+						<CompanyOverview
+							company={company}
+							researchBlocked={research.blocked}
+							researchMessage={research.message}
+						/>
+					),
 				},
 				{
 					value: "contacts",
@@ -241,9 +248,7 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 			}
 			media={
 				<EntityLogo
-					src={company?.iconUrl ?? company?.logoUrl}
-					darkSrc={company?.iconDarkUrl}
-					tone={company?.iconTone as EntityLogoTone | null | undefined}
+					{...companyLogoProps(company)}
 					name={company?.name ?? "?"}
 					size="lg"
 				/>
@@ -297,7 +302,15 @@ export function CompanySheet({ companyId }: { companyId: string }) {
 	);
 }
 
-function CompanyOverview({ company }: { company: Company }) {
+function CompanyOverview({
+	company,
+	researchBlocked,
+	researchMessage,
+}: {
+	company: Company;
+	researchBlocked: boolean;
+	researchMessage: string | null;
+}) {
 	const trpc = useTRPC();
 	const cache = useCrmCache();
 
@@ -411,6 +424,8 @@ function CompanyOverview({ company }: { company: Company }) {
 					<DetailSheetPending
 						fields={pendingFields(company)}
 						running={isEnriching(company.enrichmentStatus, company.queued)}
+						blocked={researchBlocked}
+						message={researchMessage}
 					/>
 
 					{hasCompanyLinks(company) ? (

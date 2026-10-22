@@ -1,7 +1,29 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import pg from "pg";
+
+// Bun loads .env from the working directory; this script runs from the package, so the
+// repo root's .env is read here when the variables are not already in the environment.
+if (!process.env.DATABASE_URL && !process.env.TEST_DATABASE_URL) {
+	const rootEnv = join(dirname(import.meta.dirname), "..", "..", ".env");
+	if (existsSync(rootEnv)) {
+		for (const line of readFileSync(rootEnv, "utf8").split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("="))
+				continue;
+			const eq = trimmed.indexOf("=");
+			const key = trimmed.slice(0, eq).trim();
+			const value = trimmed
+				.slice(eq + 1)
+				.trim()
+				.replace(/^"(.*)"$/, "$1");
+			if (key === "DATABASE_URL" || key === "TEST_DATABASE_URL") {
+				process.env[key] ??= value;
+			}
+		}
+	}
+}
 
 const SCHEMA = join(dirname(import.meta.dirname), "prisma", "schema.prisma");
 const MIGRATIONS = join(dirname(import.meta.dirname), "prisma", "migrations");

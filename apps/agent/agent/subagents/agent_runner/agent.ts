@@ -1,19 +1,24 @@
-import { defineAgent, defineDynamic } from "eve";
+import { defineAgent } from "eve";
 import { z } from "zod";
-import { AGENT_MODEL_FALLBACK } from "../../lib/model";
+import { normalizedAuthoredSchema } from "../../lib/registered-tools";
+import { agentModel } from "../../lib/model";
 import { attribute, purposeOf } from "../../lib/session-purpose";
 
 export default defineAgent({
 	description:
 		"Execute one immutable deployed CRM agent version and persist its result and every side effect.",
-	model: defineDynamic({
-		fallback: AGENT_MODEL_FALLBACK,
-		events: { "session.started": () => null },
-	}),
-	outputSchema: z.object({
-		summary: z.string().min(1).max(1000),
-		result: z.record(z.string(), z.unknown()).nullable(),
-	}),
+	modelContextWindowTokens: 200_000,
+	model: agentModel(),
+	outputSchema: z.fromJSONSchema(
+		normalizedAuthoredSchema(
+			z.object({
+				summary: z.string().min(1).max(1000),
+				result: z.record(z.string(), z.unknown()).nullable(),
+			}),
+			"Agent output",
+			"output",
+		),
+	),
 	limits: {
 		maxInputTokensPerSession: 500_000,
 		maxOutputTokensPerSession: 40_000,

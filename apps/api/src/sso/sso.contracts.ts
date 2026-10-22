@@ -35,6 +35,11 @@ const ssoPublicProviderOutput = z.object({
 export const ssoSignInOptionsOutput = z.object({
 	google: z.boolean(),
 	microsoft: z.boolean(),
+	pramaanKeySet: z.boolean(),
+	/** The origin the API was told this app is served from (APP_URL). */
+	appUrl: z.string(),
+	/** The managed sign-in backend's browser address, when one was opened this boot. */
+	managedAuthUrl: z.string().nullable(),
 	providers: z.array(ssoPublicProviderOutput),
 });
 

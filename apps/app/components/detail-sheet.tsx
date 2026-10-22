@@ -302,9 +302,14 @@ export function DetailSheetProperties({
 export function DetailSheetPending({
 	fields,
 	running,
+	blocked = false,
+	message,
 }: {
 	fields: string[];
 	running: boolean;
+	/** Research cannot run on this install: never show a queued/researching state. */
+	blocked?: boolean;
+	message?: string | null;
 }) {
 	if (fields.length === 0) return null;
 
@@ -315,15 +320,19 @@ export function DetailSheetPending({
 					aria-hidden
 					className={cn(
 						"size-1.5 shrink-0 rounded-full",
-						running ? "bg-primary" : "bg-muted-foreground",
+						!blocked && running ? "bg-primary" : "bg-muted-foreground",
 					)}
 				/>
 				<span className="font-medium text-xs">
-					{running ? "Agent is researching" : "Not known yet"}
+					{blocked
+						? "Research is not set up"
+						: running
+							? "Agent is researching"
+							: "Not known yet"}
 				</span>
 			</div>
 			<p className="text-pretty text-muted-foreground text-xs/5">
-				{fields.join(", ")}
+				{blocked && message ? message : fields.join(", ")}
 			</p>
 		</div>
 	);

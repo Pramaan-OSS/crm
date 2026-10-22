@@ -1,8 +1,6 @@
+import { companyLogoProps } from "@crm/db/images";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
-import {
-	EntityLogo,
-	type EntityLogoTone,
-} from "@crm/ui/components/entity-logo";
+import { EntityLogo } from "@crm/ui/components/entity-logo";
 
 export type CompanyRef = {
 	id: string;
@@ -12,6 +10,7 @@ export type CompanyRef = {
 	iconDarkUrl?: string | null;
 	iconTone?: string | null;
 	logoUrl?: string | null;
+	logoDarkUrl?: string | null;
 };
 
 export function CompanyCell({ company }: { company: CompanyRef | null }) {
@@ -20,9 +19,7 @@ export function CompanyCell({ company }: { company: CompanyRef | null }) {
 	return (
 		<span className="flex min-w-0 items-center gap-2">
 			<EntityLogo
-				src={company.iconUrl ?? company.logoUrl}
-				darkSrc={company.iconDarkUrl}
-				tone={company.iconTone as EntityLogoTone | null | undefined}
+				{...companyLogoProps(company)}
 				name={company.name}
 				size="sm"
 			/>

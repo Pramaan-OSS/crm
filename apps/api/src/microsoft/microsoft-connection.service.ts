@@ -1,11 +1,22 @@
 import type { Db, Prisma } from "@crm/db";
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+	forwardRef,
+	Inject,
+	Injectable,
+	Logger,
+	NotFoundException,
+	Optional,
+} from "@nestjs/common";
 import { ActivityStampService } from "../crm/activity-stamp.service";
 import { InjectDatabase } from "../database/database.constants";
 import { APP_FOR_SOURCE } from "../mailbox/mailbox.constants";
 import { MailboxTokenService } from "../mailbox/mailbox-token.service";
 import { SyncStateService } from "../mailbox/sync-state.service";
 import { AppsConnectionService } from "../pramaan/apps-connection.service";
+import {
+	MAILBOX_SYNC,
+	type MailboxSyncRunner,
+} from "../sync/mailbox-sync.token";
 import {
 	MICROSOFT_PROVIDER_ID,
 	MICROSOFT_SYNC_SOURCES,
@@ -32,6 +43,9 @@ export class MicrosoftConnectionService {
 		private readonly tokens: MailboxTokenService,
 		private readonly state: SyncStateService,
 		private readonly stamp: ActivityStampService,
+		@Optional()
+		@Inject(MAILBOX_SYNC)
+		private readonly mailboxSync?: MailboxSyncRunner,
 	) {}
 
 	async status(userId: string): Promise<MicrosoftConnectionStatus> {
@@ -94,6 +108,9 @@ export class MicrosoftConnectionService {
 				userId,
 				sources: added,
 			});
+			// A rep just connected: sync their mail right away instead of
+			// waiting for the next scheduled sweep.
+			void this.mailboxSync?.runForUser(userId).catch(() => {});
 		}
 	}
 
@@ -105,6 +122,13 @@ export class MicrosoftConnectionService {
 
 		const purged = await this.db.$transaction(
 			async (tx) => {
+				await tx.calendarEvent.deleteMany({
+					where: {
+						syncedByUserId: userId,
+						iCalUid: { startsWith: "outlook:" },
+					},
+				});
+
 				const touched = await tx.emailMessage.findMany({
 					where: mine,
 					select: { threadId: true },

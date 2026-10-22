@@ -102,7 +102,7 @@ function PageShellActions({
 		<div
 			data-slot="page-shell-actions"
 			className={cn(
-				"col-start-2 row-start-1 flex flex-wrap items-center gap-2 self-center justify-self-end",
+				"col-start-2 row-start-1 relative z-10 flex flex-wrap items-center gap-2 self-center justify-self-end",
 				className,
 			)}
 			{...props}

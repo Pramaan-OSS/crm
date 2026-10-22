@@ -4,6 +4,9 @@ process.env.API_URL = "https://crm.example.test";
 
 const { canConfigureSso, ssoCallbackBase, ssoCallbackURL, ssoProviderName } =
 	await import("../src/sso");
+// env.ts snapshots the API origin at first import, and other specs in this
+// package may import it first — assert the composition, not the snapshot.
+const { apiUrl } = await import("../src/env");
 
 describe("canConfigureSso", () => {
 	it("is the same answer as renaming the workspace", () => {
@@ -16,15 +19,11 @@ describe("canConfigureSso", () => {
 
 describe("ssoCallbackURL", () => {
 	it("is the API origin plus the path better-auth mounts the callback on", () => {
-		expect(ssoCallbackURL("okta")).toBe(
-			"https://crm.example.test/api/auth/sso/callback/okta",
-		);
+		expect(ssoCallbackURL("okta")).toBe(`${apiUrl}/api/auth/sso/callback/okta`);
 	});
 
 	it("hangs off the base the settings page shows", () => {
-		expect(ssoCallbackBase()).toBe(
-			"https://crm.example.test/api/auth/sso/callback",
-		);
+		expect(ssoCallbackBase()).toBe(`${apiUrl}/api/auth/sso/callback`);
 	});
 });
 

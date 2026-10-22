@@ -564,6 +564,7 @@ export class CompaniesService {
 		const queued = await this.agent.companyRequested(
 			id,
 			"A rep asked for a fresh look",
+			{ fresh: true },
 		);
 
 		if (queued) {
@@ -595,6 +596,7 @@ export class CompaniesService {
 		const queued = await this.agent.companyRequested(
 			id,
 			`Briefing requested by a rep (${actingUserId})`,
+			{ fresh: true },
 		);
 
 		return { ok: true as const, queued };

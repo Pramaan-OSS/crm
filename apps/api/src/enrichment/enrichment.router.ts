@@ -1,7 +1,9 @@
+import { pramaanKeySet } from "@crm/pramaan";
 import { enrichmentQueueInput } from "@crm/validation/enrichment-queue";
 import { Inject } from "@nestjs/common";
 import { Input, Query, Router, UseMiddlewares } from "nestjs-trpc";
 import { z } from "zod";
+import { bridge } from "../agent/bridge";
 import { AuthMiddleware } from "../trpc/middlewares/auth.middleware";
 import { restMeta } from "../trpc/openapi";
 import { EnrichmentService } from "./enrichment.service";
@@ -49,6 +51,11 @@ const enrichmentQueueOutput = z.object({
 	scheduledTotal: z.number(),
 });
 
+const researchStatusOutput = z.object({
+	runnable: z.boolean(),
+	reason: z.enum(["bridge", "platform-key"]).nullable(),
+});
+
 @Router({ alias: "enrichment" })
 @UseMiddlewares(AuthMiddleware)
 export class EnrichmentRouter {
@@ -63,5 +70,20 @@ export class EnrichmentRouter {
 	})
 	async queue(@Input() input: z.infer<typeof enrichmentQueueInput>) {
 		return this.enrichment.queue(input.limit);
+	}
+
+	/** Whether research can run at all: the agent bridge and the platform key exist. */
+	@Query({
+		output: researchStatusOutput,
+		meta: restMeta("GET", "/enrichment/status", ["Enrichment"]),
+	})
+	async status() {
+		if (!bridge()) {
+			return { runnable: false, reason: "bridge" as const };
+		}
+		if (!pramaanKeySet()) {
+			return { runnable: false, reason: "platform-key" as const };
+		}
+		return { runnable: true, reason: null };
 	}
 }

@@ -29,10 +29,7 @@ export async function resolveFavicon(
 async function iconFromPage(base: string): Promise<string | null> {
 	try {
 		const { firstText, pramaanFromEnv } = await import("@crm/pramaan");
-		const api = pramaanFromEnv({
-			PRAMAAN_API_KEY: process.env.PRAMAAN_API_KEY,
-			PRAMAAN_BASE_URL: process.env.PRAMAAN_BASE_URL,
-		});
+		const api = pramaanFromEnv();
 		if (!api) return null;
 
 		const response = await api.webExtract({

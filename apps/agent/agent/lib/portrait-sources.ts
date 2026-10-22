@@ -70,7 +70,7 @@ export async function findPortrait(
 
 	if (subject.companyDomain && subject.name && !contextReady) {
 		tried.push(
-			"Context.dev is not connected, so the company site was not read",
+			"Company enrichment is not connected, so the company site was not read",
 		);
 	}
 

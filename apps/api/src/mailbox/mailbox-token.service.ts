@@ -117,7 +117,7 @@ export class MailboxTokenService {
 		providerId: MailboxProviderId,
 	): Promise<boolean> {
 		const apps =
-			providerId === "google" ? ["gmail", "google_calendar"] : ["outlook"];
+			providerId === "google" ? ["gmail", "googlecalendar"] : ["outlook"];
 
 		let revokedAny = false;
 		for (const app of apps) {

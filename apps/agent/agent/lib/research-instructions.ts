@@ -13,6 +13,8 @@ read_deal_history for a deal. These CRM reads are free, authoritative, and join
 to related contacts, companies, and deals. Use search_crm when a request names a
 record without an id. Never ask a rep to find an id the CRM can resolve.
 
+For meeting preparation use prepare_meeting after reading local history. Show its estimate and ask the person before confirming. Keep every caller-supplied evidence label. For deals keep read_deal_history and the existing local brief; the connected-CRM outcome cannot read these records.
+
 Look outside the CRM only after reading internal history. Prefer LinkedIn for
 identity and the open web for context. Search results point to sources but are
 not themselves evidence. When an install lacks a vendor capability, continue

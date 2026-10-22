@@ -11,10 +11,7 @@ export class PramaanClientProvider {
 	clientFromEnv(): Pramaan | null {
 		if (this.client !== undefined) return this.client;
 
-		this.client = pramaanFromEnv({
-			PRAMAAN_API_KEY: process.env.PRAMAAN_API_KEY,
-			PRAMAAN_BASE_URL: process.env.PRAMAAN_BASE_URL,
-		});
+		this.client = pramaanFromEnv();
 
 		return this.client;
 	}

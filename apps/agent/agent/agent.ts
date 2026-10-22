@@ -1,21 +1,16 @@
 import "@crm/env/load";
 
-import { onTelemetryProblem, syncVersion } from "@crm/telemetry";
-import { defineAgent, defineDynamic } from "eve";
+import { defineAgent } from "eve";
 import { logCapabilities } from "./lib/capabilities";
-import { AGENT_MODEL_FALLBACK } from "./lib/model";
+import { validateRegisteredToolSchemas } from "./lib/registered-tools";
+import { agentModel } from "./lib/model";
 
+validateRegisteredToolSchemas();
 void logCapabilities();
 
-onTelemetryProblem((message) => console.debug(`[telemetry] ${message}`));
-
-void syncVersion();
-
 export default defineAgent({
-	model: defineDynamic({
-		fallback: AGENT_MODEL_FALLBACK,
-		events: { "session.started": () => null },
-	}),
+	modelContextWindowTokens: 200_000,
+	model: agentModel(),
 	limits: {
 		maxInputTokensPerSession: 500_000,
 		maxOutputTokensPerSession: 50_000,

@@ -92,7 +92,8 @@ function CreateDealForm({ companyId }: { companyId?: string }) {
 	const create = useMutation(
 		trpc.deals.create.mutationOptions({
 			onSuccess: async (deal) => {
-				await cache.deal(deal.id);
+				// Close first, whatever happens next.
+				void cache.deal(deal.id).catch(() => {});
 				toast.success(`${deal.name} added.`);
 				await setOpen(null);
 				setName("");

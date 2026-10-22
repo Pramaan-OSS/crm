@@ -687,6 +687,7 @@ export class ContactsService {
 				? "A rep asked for a fresh look — they have a LinkedIn profile on file but no picture"
 				: "A rep asked for a fresh look",
 			true,
+			{ fresh: true },
 		);
 
 		if (queued) {

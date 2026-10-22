@@ -58,15 +58,21 @@ describe("finding the workspace root", () => {
 describe("the committed .env.example", () => {
 	const example = readFileSync(join(repoRoot, ".env.example"), "utf8");
 
-	it("names every variable the required section promises", () => {
+	it("asks the person to type exactly one value", () => {
+		const active = example
+			.split("\n")
+			.filter((line) => /^[A-Z][A-Z0-9_]*=/.test(line.trim()));
+		expect(active).toEqual(['PRAMAAN_API_KEY=""']);
+	});
+
+	it("documents the defaulted and optional variables as commented lines", () => {
 		for (const key of [
 			"DATABASE_URL",
 			"BETTER_AUTH_SECRET",
 			"ALLOWED_SIGN_IN",
 			"GOOGLE_CLIENT_ID",
-			"GOOGLE_CLIENT_SECRET",
 		]) {
-			expect(example).toContain(`${key}=`);
+			expect(example).toContain(`# ${key}=`);
 		}
 	});
 
@@ -74,9 +80,7 @@ describe("the committed .env.example", () => {
 		for (const line of example.split("\n")) {
 			if (line.startsWith("#") || !line.includes("=")) continue;
 			const value = line.slice(line.indexOf("=") + 1).trim();
-			expect(value === '""' || value.length > 0).toBe(true);
-			if (line.startsWith("BETTER_AUTH_SECRET")) expect(value).toBe('""');
-			if (line.startsWith("ALLOWED_SIGN_IN")) expect(value).toBe('""');
+			expect(value).toBe('""');
 		}
 	});
 });

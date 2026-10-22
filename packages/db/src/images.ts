@@ -15,7 +15,14 @@ export function isMirrored(url: string | null | undefined): boolean {
 	if (!url) return false;
 	try {
 		const parsed = new URL(url);
-		if (!parsed.pathname.startsWith(STORAGE_PATH)) return false;
+		if (
+			!parsed.pathname.startsWith(STORAGE_PATH) &&
+			!/^\/api\/logo-files\/file_[0-9A-HJKMNP-TV-Z]{26}$/.test(
+				parsed.pathname,
+			) &&
+			!/^\/api\/company-logos\/[^/]+$/.test(parsed.pathname)
+		)
+			return false;
 
 		// Ours are served from this install's own origin; the same path on
 		// somebody else's site is their image, not ours.
@@ -40,4 +47,36 @@ export function isOptimizable(url: string | null | undefined): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/** Keep the selected image's dark variant and tone together. */
+export function companyLogoProps(
+	company:
+		| {
+				logoUrl?: string | null;
+				logoDarkUrl?: string | null;
+				iconUrl?: string | null;
+				iconDarkUrl?: string | null;
+				iconTone?: string | null;
+		  }
+		| null
+		| undefined,
+): {
+	src: string | null;
+	darkSrc: string | null;
+	tone: "opaque" | "dark" | "light" | null;
+} {
+	const logo = company?.logoUrl?.trim();
+	const tone = company?.iconTone;
+	return {
+		src: logo || company?.iconUrl?.trim() || null,
+		darkSrc: logo
+			? (company?.logoDarkUrl ?? null)
+			: (company?.iconDarkUrl ?? null),
+		tone: logo
+			? null
+			: tone === "opaque" || tone === "dark" || tone === "light"
+				? tone
+				: null,
+	};
 }

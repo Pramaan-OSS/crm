@@ -1,5 +1,6 @@
 "use client";
 
+import { companyLogoProps } from "@crm/db/images";
 import Archive from "@carbon/icons-react/es/Archive";
 import { Button } from "@crm/ui/components/button";
 import {
@@ -8,10 +9,7 @@ import {
 	type DataTableFacet,
 } from "@crm/ui/components/data-table";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
-import {
-	EntityLogo,
-	type EntityLogoTone,
-} from "@crm/ui/components/entity-logo";
+import { EntityLogo } from "@crm/ui/components/entity-logo";
 import { useTableSelection } from "@crm/ui/hooks/use-table-selection";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -33,124 +31,132 @@ import {
 } from "@/lib/enrichment-status";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
+import { useResearchStatus } from "@/lib/use-research-status";
 import { CompaniesBulkActions } from "./companies-bulk-actions";
 import { companiesSearchParams } from "./companies-search-params";
 
 type CompanyRow = RouterOutputs["companies"]["list"]["rows"][number];
 
-const COLUMNS: DataTableColumn<CompanyRow>[] = [
-	{
-		id: "name",
-		header: "Company",
-		sortable: true,
-		hideable: false,
-		width: "w-[26%]",
-		cell: (row) => (
-			<span className="flex min-w-0 items-center gap-2.5">
-				<EntityLogo
-					src={row.iconUrl ?? row.logoUrl}
-					darkSrc={row.iconDarkUrl}
-					tone={row.iconTone as EntityLogoTone | null | undefined}
-					name={row.name}
-					size="sm"
-				/>
-				<span className="truncate font-medium">{row.name}</span>
-			</span>
-		),
-	},
-	{
-		id: "domain",
-		header: "Domain",
-		sortable: true,
-		width: "w-[16%]",
-		hideBelow: "md",
-		cell: (row) =>
-			row.domain ? (
-				<span className="truncate text-muted-foreground">{row.domain}</span>
-			) : (
-				<EmptyCellValue />
+function columnsFor(
+	blocked: boolean,
+	fieldColumns: DataTableColumn<CompanyRow>[],
+	archived: boolean,
+): DataTableColumn<CompanyRow>[] {
+	const base: DataTableColumn<CompanyRow>[] = [
+		{
+			id: "name",
+			header: "Company",
+			sortable: true,
+			hideable: false,
+			width: "w-[26%]",
+			cell: (row) => (
+				<span className="flex min-w-0 items-center gap-2.5">
+					<EntityLogo {...companyLogoProps(row)} name={row.name} size="sm" />
+					<span className="truncate font-medium">{row.name}</span>
+				</span>
 			),
-	},
-	{
-		id: "industry",
-		header: "Industry",
-		sortable: true,
-		width: "w-[16%]",
-		hideBelow: "lg",
-		cell: (row) =>
-			row.industry ? (
-				<span className="truncate">{row.industry}</span>
-			) : (
-				<EmptyCellValue />
-			),
-	},
-	{
-		id: "owner",
-		header: "Owner",
-		sortable: true,
-		width: "w-[16%]",
-		hideBelow: "md",
-		cell: (row) => <OwnerCell owner={row.owner} />,
-	},
-	{
-		id: "contacts",
-		header: "Contacts",
-		sortable: true,
-		align: "right",
-		width: "w-[9%]",
-		hideBelow: "lg",
-		cell: (row) => <span className="tabular-nums">{row.contactCount}</span>,
-	},
-	{
-		id: "deals",
-		header: "Open deals",
-		sortable: true,
-		align: "right",
-		width: "w-[9%]",
-		cell: (row) => <span className="tabular-nums">{row.openDealCount}</span>,
-	},
-	{
-		id: "createdAt",
-		header: "Created",
-		label: "Created date",
-		sortable: true,
-		align: "right",
-		width: "w-[10%]",
-		defaultHidden: true,
-		cell: (row) => (
-			<span className="text-muted-foreground">
-				<LocalRelativeTime date={row.createdAt} />
-			</span>
-		),
-	},
-	{
-		id: "lastActivity",
-		header: "Last activity",
-		sortable: true,
-		align: "right",
-		width: "w-[12%]",
-		hideBelow: "sm",
-		cell: (row) => (
-			<span className="text-muted-foreground">
-				{row.lastActivityAt ? (
-					<LocalRelativeTime date={row.lastActivityAt} />
+		},
+		{
+			id: "domain",
+			header: "Domain",
+			sortable: true,
+			width: "w-[16%]",
+			hideBelow: "md",
+			cell: (row) =>
+				row.domain ? (
+					<span className="truncate text-muted-foreground">{row.domain}</span>
 				) : (
 					<EmptyCellValue />
-				)}
-			</span>
-		),
-	},
-	{
-		id: "enrichment",
-		header: "Enrichment",
-		label: "Enrichment status",
-		defaultHidden: true,
-		width: "w-[14%]",
-		cell: (row) => (
-			<EnrichmentIndicator status={row.enrichmentStatus} queued={row.queued} />
-		),
-	},
-];
+				),
+		},
+		{
+			id: "industry",
+			header: "Industry",
+			sortable: true,
+			width: "w-[16%]",
+			hideBelow: "lg",
+			cell: (row) =>
+				row.industry ? (
+					<span className="truncate">{row.industry}</span>
+				) : (
+					<EmptyCellValue />
+				),
+		},
+		{
+			id: "owner",
+			header: "Owner",
+			sortable: true,
+			width: "w-[16%]",
+			hideBelow: "md",
+			cell: (row) => <OwnerCell owner={row.owner} />,
+		},
+		{
+			id: "contacts",
+			header: "Contacts",
+			sortable: true,
+			align: "right",
+			width: "w-[9%]",
+			hideBelow: "lg",
+			cell: (row) => <span className="tabular-nums">{row.contactCount}</span>,
+		},
+		{
+			id: "deals",
+			header: "Open deals",
+			sortable: true,
+			align: "right",
+			width: "w-[9%]",
+			cell: (row) => <span className="tabular-nums">{row.openDealCount}</span>,
+		},
+		{
+			id: "createdAt",
+			header: "Created",
+			label: "Created date",
+			sortable: true,
+			align: "right",
+			width: "w-[10%]",
+			defaultHidden: true,
+			cell: (row) => (
+				<span className="text-muted-foreground">
+					<LocalRelativeTime date={row.createdAt} />
+				</span>
+			),
+		},
+		{
+			id: "lastActivity",
+			header: "Last activity",
+			sortable: true,
+			align: "right",
+			width: "w-[12%]",
+			hideBelow: "sm",
+			cell: (row) => (
+				<span className="text-muted-foreground">
+					{row.lastActivityAt ? (
+						<LocalRelativeTime date={row.lastActivityAt} />
+					) : (
+						<EmptyCellValue />
+					)}
+				</span>
+			),
+		},
+		{
+			id: "enrichment",
+			header: "Enrichment",
+			label: "Enrichment status",
+			defaultHidden: true,
+			width: "w-[14%]",
+			cell: (row) => (
+				<EnrichmentIndicator
+					status={row.enrichmentStatus}
+					queued={row.queued}
+					blocked={blocked}
+				/>
+			),
+		},
+	];
+
+	const all = [...base, ...fieldColumns];
+	return archived ? [...all, ARCHIVED_COLUMN] : all;
+}
 
 const ARCHIVED_COLUMN: DataTableColumn<CompanyRow> = {
 	id: "archivedAt",
@@ -173,6 +179,7 @@ const ARCHIVED_COLUMN: DataTableColumn<CompanyRow> = {
 export function CompaniesTable() {
 	const openRecord = useOpenRecord();
 	const trpc = useTRPC();
+	const research = useResearchStatus();
 	const prefetchRecord = usePrefetchRecord();
 	const table = useTableQuery(companiesSearchParams);
 	const { query, input, setArchived } = table;
@@ -235,11 +242,8 @@ export function CompaniesTable() {
 
 	const fieldColumns = useFieldColumns<CompanyRow>("COMPANY");
 	const columns = useMemo(
-		() =>
-			input.archived
-				? [...COLUMNS, ARCHIVED_COLUMN, ...fieldColumns]
-				: [...COLUMNS, ...fieldColumns],
-		[fieldColumns, input.archived],
+		() => columnsFor(research.blocked, fieldColumns, input.archived),
+		[research.blocked, fieldColumns, input.archived],
 	);
 
 	return (

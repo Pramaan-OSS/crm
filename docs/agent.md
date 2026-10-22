@@ -11,27 +11,28 @@ are in `docs/setup.md`.
 
 ## Model
 
-Default `zai/glm-5.2-fast`; `DEFAULT_AGENT_MODEL` in `@crm/db/settings` because the
-agent and the API both need it.
-
-- **A row (`AppSetting`), not an env var**, via `defineDynamic` on `session.started`.
-  Open conversations keep their model — prompt caches are per model.
-- **`lib/model.ts` always sends `modelContextWindowTokens`**; eve never inherits it.
-- **A failed read logs and keeps the compiled fallback.** Never throws.
-- **The chooser offers only `tool-use` models** (`ModelCatalogService`).
-- **Not a frontier model, deliberately** — refusing wrong answers is enforced by the
-  tools and evidence model, not model strength.
+The agent's generation runs on the platform's `llm.chat` capability through the
+Pramaan client; the platform picks the provider. This template never names a
+model or a provider, and there is no model setting. Without a
+`PRAMAAN_API_KEY`, agent turns fail with a message asking the workspace owner
+to set one. Each step defaults to at most 1,024 output tokens.
+`RESEARCH_MAX_TOKENS` sets the ceiling for both streamed and whole replies, from
+64 to 8,192. A short step can request fewer tokens within those bounds. Failed
+company research closes its earlier outstanding brand task and remains retryable.
+A retryable rate-limit refusal can honour server `Retry-After` up to twice per
+step, at most 60 seconds each, before stream data arrives. Unavailable or uncertain
+answers never retry automatically; longer or missing delays remain failures.
 
 ## Pictures are copied, never linked
 
-`mirror()` copies bytes to Vercel Blob; the record points at our copy. Lives in
+`mirror()` copies bytes into platform storage; the record points at our copy. Lives in
 **`@crm/db/blob`** — writers are `lib/brand-images.ts`, `lib/portrait.ts`,
 `FaviconService`, `ImageMirrorService`, `prisma/seed.ts`.
 
 - **The key hashes the bytes** — idempotent, and a redesigned mark gets a new URL.
 - **`COMPANY_IMAGE_FIELDS` (`@crm/db/images`) is the one list of picture columns.**
 - **Fetch through `@crm/db/safe-fetch`** — vendor URLs are SSRF vectors.
-- **No `BLOB_READ_WRITE_TOKEN` means no photographs**; logos keep the origin URL.
+- **No `PRAMAAN_API_KEY` means no photographs**; logos keep the origin URL.
 - **`isOptimizable` (`@crm/db/images`) is the whole rule**: `next.config.ts`
   allow-lists only our Blob host (a wildcard makes us an open image proxy), and a
   mirrored **SVG is still refused**.
@@ -276,7 +277,7 @@ preamble; `lib/workspace.ts` is the only renderer.
 - **Not a `Company` row** — that needs excluding from every list, facet and join. One
   `WorkspaceProfile` keyed on `WORKSPACE_ID`.
 
-The pass is a `workspace-profile` task using `web_fetch` (no credits), filed only via
+The pass is a `workspace-profile` task using `web_fetch` through Pramaan `web.read` (one research-budget unit), filed only via
 `write_workspace_profile`, queued by `WorkspaceService.update` on a website change. **A
 finished attempt stands the sweep down for seven days.**
 
@@ -294,12 +295,14 @@ egress:
 
 ## Sandbox
 
-`agent/sandbox/sandbox.ts`: `bash`, file tools, `/workspace`, **`deny-all` egress on
-the backend factory** so it cannot be forgotten per session. Costs nothing —
-`web_fetch` runs in the app runtime, `web_search` at the provider.
+The research agent disables `bash`, `glob`, `grep`, `read_file`, `write_file` and
+`todo`; CRM tools provide its records and task state. It keeps `ask_question` for
+required clarification and `load_skill` for authored research instructions.
+`web_fetch` is an authored page reader through Pramaan `web.read`, used by workspace
+company research. It has no direct HTTP executor.
 
-**Never give the sandbox `DATABASE_URL`.** CRM access is authored tools. A shell with
-credentials and network is exfiltration-shaped; with neither it is a text processor.
+The sandbox backend retains deny-all network access. Never give the sandbox
+`DATABASE_URL`; CRM access runs only through the authored record tools.
 
 ## Team-agent builder and runner
 
@@ -354,7 +357,7 @@ delegation paths for custom agents.
   nothing further is written. The poke only stops it spending tokens, and an unset
   `AGENT_BRIDGE_SECRET` costs exactly that and nothing more.
 - **Cancelling is not undoing.** eve keeps side effects that already completed, so
-  a note, task or Slack message the run already made stays. The dialog says so.
+  a note, task or email the run already made stays. The dialog says so.
 - **Whoever started it can stop it**, plus the creator and workspace admins.
   `canCancel` is computed server-side per run and is what the button reads, so the
   control and the 403 cannot disagree.
@@ -701,7 +704,6 @@ switch it on:
 | Variable | What it does |
 | --- | --- |
 | `E2E_LIVE_MODEL=1` | `live-run.e2e.ts` calls the real model. It spends credits. |
-| `E2E_SLACK_JOIN=1` | `slack-join.e2e.ts` joins real Slack channels. It does not leave them. |
 | `E2E_LOAD_COUNT` | How many tasks `load.e2e.ts` queues. The default is 300. |
 
 Stop the local agent before you run an e2e script against a dev database. A

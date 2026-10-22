@@ -10,7 +10,7 @@ import {
 import { E2E } from "./e2e-config";
 
 const COUNT = Number(process.env.E2E_LOAD_COUNT ?? E2E.load.defaultCount);
-const DRAIN_PASSES = Math.ceil(COUNT / VISIBLE_BATCH) + E2E.load.drainPassSlack;
+const DRAIN_PASSES = Math.ceil(COUNT / VISIBLE_BATCH) + 2;
 
 async function seedAgent() {
 	const owner = await db.user.findFirstOrThrow({ select: { id: true } });

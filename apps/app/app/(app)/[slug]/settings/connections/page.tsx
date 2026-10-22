@@ -8,6 +8,7 @@ import { Suspense } from "react";
 import { requireSession } from "@/lib/session";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
 import { AddConnectionDialog } from "./add-connection-dialog";
+import { RecommendedApps } from "@/components/connections/recommended-apps";
 
 export const metadata: Metadata = { title: "Connections" };
 
@@ -123,6 +124,7 @@ async function ConnectionsSettingsPageContent({
 					</p>
 				</div>
 			)}
+			<RecommendedApps slug={slug} google={google} microsoft={microsoft} />
 			<AddConnectionDialog
 				slug={slug}
 				open={first(query.add) === "1"}

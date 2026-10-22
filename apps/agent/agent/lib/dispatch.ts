@@ -1,4 +1,4 @@
-import { EnrichmentStatus } from "@crm/db";
+import { db, EnrichmentStatus } from "@crm/db";
 import { fieldBackfillPayload } from "@crm/validation/field-backfill";
 import { APP_AUTH, type AppAuth } from "./app-auth";
 import { brandOutcome, runBrand } from "./brand";
@@ -13,8 +13,11 @@ import {
 	claimDue,
 	completeTask,
 	DIRECT_KINDS,
+	isCreditRefusal,
 	type LeasedTask,
 	noteSession,
+	type TaskSubject,
+	terminateTask,
 } from "./tasks";
 
 export const VISIBLE_BATCH = DISPATCH.visible.batch;
@@ -78,6 +81,21 @@ async function reconcileDirect(
 ): Promise<void> {
 	if (outcome.finished) return;
 
+	if (isCreditRefusal(outcome.reason)) {
+		const subject =
+			(await terminateTask(
+				task.id,
+				"Not enough credit — top up, then requeue this task.",
+			)) ?? task;
+		await settle(
+			subject,
+			EnrichmentStatus.FAILED,
+			"Not enough credit — top up to continue",
+		).catch(() => {});
+		return;
+	}
+
+	await completeTask(task.id, `failed: ${outcome.reason}`);
 	await settle(task, EnrichmentStatus.FAILED, outcome.reason).catch(() => {});
 }
 
@@ -191,7 +209,33 @@ async function reconcileStart(
 		return;
 	}
 
+	// A credit refusal will not change on retry, so end the retry ladder
+	// here instead of letting later sweeps re-lease and refuse again.
+	if (isCreditRefusal(outcome.reason)) {
+		const subject =
+			(await terminateTask(
+				task.id,
+				"Not enough credit — top up, then requeue this task.",
+			)) ?? taskSubjectOf(task);
+		await settle(
+			subject,
+			EnrichmentStatus.FAILED,
+			"Not enough credit — top up to continue",
+		).catch(() => {});
+		return;
+	}
+
 	await settle(task, EnrichmentStatus.FAILED, outcome.reason).catch(() => {});
+}
+
+function taskSubjectOf(task: LeasedTask): TaskSubject {
+	return {
+		id: task.id,
+		contactId: task.contactId,
+		companyId: task.companyId,
+		dealId: task.dealId,
+		kind: task.kind,
+	};
 }
 
 export async function linkSession(
@@ -243,6 +287,10 @@ export function taskAuth(task: LeasedTask, base: AppAuth = APP_AUTH): AppAuth {
 			taskKind: task.kind,
 			reason: task.reason,
 			budget: String(task.budget),
+			...(task.payload &&
+			(task.payload as Record<string, unknown>).fresh === true
+				? { fresh: "1" }
+				: {}),
 			...records,
 		},
 	};
@@ -272,7 +320,18 @@ function oldestUnsettledAt(): Date | null {
 	return oldest;
 }
 
-export function dispatchHealth() {
+export async function dispatchHealth() {
+	// Which database this process is actually on — a wrong or stale
+	// DATABASE_URL looks exactly like an empty queue from the inside.
+	const database = await db.$queryRaw<{ name: string; port: number | null }[]>`
+			SELECT current_database() AS name, inet_server_port() AS port
+		`
+		.then((rows) => ({ ...rows[0] }))
+		.catch((error: unknown) => ({
+			name: reasonOf(error).slice(0, 160),
+			port: null,
+		}));
+
 	const startedAt = lastSweepStartedAt;
 	const finishedAt = lastSweepFinishedAt;
 	const collapsed = Boolean(
@@ -288,6 +347,7 @@ export function dispatchHealth() {
 			: since;
 
 	return {
+		database: database ? { name: database.name, port: database.port } : null,
 		startedAt: startedAt?.toISOString() ?? null,
 		finishedAt: finishedAt?.toISOString() ?? null,
 		running,
@@ -397,7 +457,7 @@ function work(
 		case "recheck":
 			return "Bring this contact's record up to date: their background, their current role, and anything that has changed since we last looked.";
 		case "meeting-prep":
-			return "There is a meeting with this person soon. Make sure whoever is taking it opens the record knowing who they are dealing with.";
+			return "There is a meeting with this person soon. Read CRM history, then use prepare_meeting. Show the estimate and ask approval before confirming; never approve for the person. Keep caller-supplied evidence labels.";
 		case "company-profile":
 			return "This company's brand, industry, location and links are filled in separately and may already be there. Read the account, fill anything still missing, and write a brief if there is something worth saying.";
 		case "workspace-profile":

@@ -4,7 +4,7 @@ import { listDeals } from "../lib/lookup";
 
 export default defineTool({
 	description:
-		"List deals across the CRM with pipeline status and inactivity filters. Use this for broad requests such as all open deals, stale deals, deals untouched for a number of days, or a pipeline sweep. Results are oldest-touch first and paginated; continue with nextCursor while hasMore is true. Free.",
+		"List deals by pipeline status and inactivity, oldest activity first. Follow nextCursor while hasMore for the requested scope.",
 	inputSchema: z.object({
 		status: z.enum(["open", "won", "lost", "all"]).default("open"),
 		inactiveForDays: z

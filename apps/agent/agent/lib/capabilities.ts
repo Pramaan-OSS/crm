@@ -101,7 +101,7 @@ export async function logCapabilities(): Promise<void> {
 	}
 
 	console.log(
-		"[agent] Note: the research runs themselves need a tool-capable model, which no Pramaan capability serves yet. Until one exists, agent runs report that they cannot start.",
+		"[agent] Note: the agent's own generation runs on the platform's llm.chat capability; the platform picks the provider.",
 	);
 }
 

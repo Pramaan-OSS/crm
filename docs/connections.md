@@ -29,35 +29,15 @@ form to a settings page, stop — that work belongs in the builder.
 
 ## Removing a connection is an owner or admin decision
 
-A connection is shared. One person disconnecting Slack stops every agent that
-posts to it and clears the cached channel list for everybody, so
-`SlackConnectionService.disconnect` asks `canManageConnections` (`@crm/auth`)
-after `AgentAccessService.assertMember`, and `slack.status` returns `canManage`
-so the button is disabled for the same people the service refuses. Being signed
-in is not authorisation: `AuthMiddleware` only proves a session exists.
+A connection is shared. One person disconnecting a mailbox stops every agent that
+reads it, so disconnecting asks `canManageConnections` (`@crm/auth`) after
+`AgentAccessService.assertMember`. Being signed in is not authorisation:
+`AuthMiddleware` only proves a session exists.
 
-Everything additive — joining a channel, creating one, refreshing people — stays
-open to any workspace member, because the agent builder needs it and Slack can
-undo it.
+Everything additive — refreshing people, reading new mail — stays open to any
+workspace member, because the agent builder needs it and a connection can be
+re-established.
 
-## Connecting Slack is refused at the OAuth endpoints, not in the UI
-
-Connecting is the same decision as disconnecting, because `replaceSlackConnection`
-deletes every other Slack account row: a second person connecting *replaces* the
-workspace's Slack, and every deployed agent then reads from and posts to whichever
-Slack they installed. Hiding the button is not enough — `authClient.oauth2.link`
-is one POST.
-
-`slackConnectGuard` (`packages/auth/src/slack-connect.ts`) is Better Auth's
-`hooks.before`, and it asks the same `canManageConnections` the API does. It
-covers all three doors: `/oauth2/link`, `/sign-in/oauth2` (Slack is a connection,
-never a sign-in method, and that endpoint needs no session) and
-`/oauth2/callback/slack`. The callback is the one that matters — refusing there
-happens **before the code is exchanged**, so a refused attempt writes no
-`SlackWorkspaceGrant` user token and deletes no bot token. Google and Microsoft
-sign in on different paths and never reach the guard.
-
-A workspace with no owner and no admin lets any member connect. There is nobody
 left to ask, and a fresh install must not be locked out of its first connection.
 
 ## Direction is the organising idea
@@ -86,55 +66,19 @@ channel like `#sales`. A naming pattern for channels the agent creates
 Chosen destinations are collected **in the builder conversation** with the
 Questionnaire, not in a settings form. See "The Questionnaire" below.
 
-## Slack needs two grants, not one
-
-A bot token cannot add itself to a private channel. No Slack scope grants that.
-The workspace must also hand over a **user token** (`xoxp-`), which the app then
-uses to act as the person who connected Slack.
-
-- **Public channel** — the bot self-joins with `conversations.join`. Bot token only.
-- **Private channel** — only a user token can invite the bot. Both tokens.
-
-The bot token lives on `Account`. The user token lives on `SlackWorkspaceGrant`,
-keyed by Slack team id, because the grant belongs to the workspace and not to the
-person who clicked Connect. `packages/auth/src/slack-grant.ts` writes it, and
-`apps/agent/agent/lib/slack-connection.ts` is the only place that reads either.
-
-A missing user grant is a capability that is off, not an error. The connection
-page names it, and the private-channel row falls back to asking a human.
-
-**The cached row does not choose the token.** `joinSlackChannel`
-(`apps/agent/agent/lib/slack-membership.ts`) reads the channel from Slack with
-`conversations.info` before it picks a path. `slackChannel.isPrivate` and
-`isMember` are a cache, and a cache is wrong the moment somebody adds the bot in
-Slack — or the moment a new column arrives with a default, which classifies every
-existing row as public and non-member until the inventory next runs. A bot that
-cannot see the channel at all is read as private and not a member, which is the
-only safe reading. When Slack and the row disagree the row is corrected and a
-`slack-people-match` task is queued, so the connection page stops showing the
-stale classification too.
-
-**Nothing else calls Slack to read the channel list.** The agent builder reads
-the cached rows and, when they are older than `SLACK.inventory.staleMs`, queues
-the same background task rather than waiting on a round trip
-(`apps/agent/agent/lib/slack-people.ts`). A builder chat that blocks on Slack is
-a builder chat that is as slow as Slack is.
-
 ## Permissions are shown in groups, not one line each
 
-Sixteen scopes read as noise. Group them by what they touch — people, channels it
-can read, messages it can send, channels it can change — and give each group a
-count of how many reach the whole workspace. `SLACK_SCOPE_GROUPS` in
-`packages/auth/src/slack-scopes.ts` owns both the grouping and the plain wording.
-
-The catalogue is the single source. `auth.ts` builds its scope request from it and
-the page renders from it, so the screen cannot promise something the app never
-asked for.
+Scope lists read as noise. Group them by what they touch — the person, the mail
+it can read, the calendar it can change — and show the plain wording next to each
+group. The scopes the app requests are the identity scopes in
+`packages/auth/src/scopes.ts`; the connection page renders what was granted, so
+the screen cannot promise something the app never asked for.
 
 ## Identity matching is connection-level
 
-"Message whoever owns the deal" needs a CRM user *and* a Slack member. Those are
-two identities. Match on email, show the result, and let a human fix it.
+"Message whoever owns the deal" needs a CRM user *and* the person on the other
+side of the connection. Those are two identities. Match on email, show the
+result, and let a human fix it.
 
 An unmatched person must be allowed. The automation stops and says so rather than
 guessing at a similar name — and the connection page surfaces the count so the
@@ -158,10 +102,10 @@ Rules for a question:
   ("This one is a standing channel, so it is the same every time").
 - Choices carry a fact that helps decide — member counts, last activity — not
   decoration.
-- Always offer an escape ("Search for another channel").
-- Footnote the constraint that shapes the list ("Only channels Slack has been
-  added to").
-- The submit label restates the answer: "Use #sales", not "Continue".
+- Always offer an escape ("Search for another mailbox").
+- Footnote the constraint that shapes the list ("Only mailboxes connected to
+  this workspace").
+- The submit label restates the answer: "Use sales@acme.com", not "Continue".
 
 ## Failure is on the surface
 
@@ -216,8 +160,8 @@ flatten a list of separately-actionable objects.
 
 ## Brand marks
 
-`packages/ui/src/components/brand-logos/` has claude, eve, github, google,
-microsoft, nextjs, slack, stripe, vercel. **Stripe is there** — use it.
+`packages/ui/src/components/brand-logos/` has eve, github, google,
+microsoft, nextjs, stripe, vercel. **Stripe is there** — use it.
 
 Missing from the repo and living only in Paper: **hubspot** (`hubspot icon`
 `L5E-0`), **docusign** (`docusign logo` `L5Z-0`), **ergo** (`ergo logo` `KJJ-0`).

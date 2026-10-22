@@ -1,4 +1,3 @@
-import { syncError } from "@crm/telemetry";
 import { Injectable, Logger } from "@nestjs/common";
 import { GoogleConnectionService } from "../google/google-connection.service";
 import { GoogleSyncService } from "../google/google-sync.service";
@@ -32,6 +31,51 @@ export class MailboxSyncService {
 		private readonly googleConnections: GoogleConnectionService,
 		private readonly microsoftConnections: MicrosoftConnectionService,
 	) {}
+
+	/** Sync every due row for one rep — kicked when a connection turns active. */
+	async runForUser(userId: string): Promise<TickSummary> {
+		const startedAt = Date.now();
+		const summary: TickSummary = {
+			attempted: 0,
+			synced: 0,
+			skipped: 0,
+			rateLimited: 0,
+			failed: 0,
+			durationMs: 0,
+		};
+
+		const due = await this.state.due(new Date());
+		const mine = due.filter((row) => row.userId === userId);
+
+		for (const row of mine) {
+			if (!(await this.state.claim(row, new Date()))) continue;
+			summary.attempted += 1;
+			try {
+				const outcome = await this.runOne(row.userId, row.source);
+				if (outcome === null || outcome.status === "skipped") {
+					summary.skipped += 1;
+					await this.state.release(row.id);
+				} else {
+					summary[
+						outcome.status === "rate-limited"
+							? "rateLimited"
+							: outcome.status === "failed" || outcome.status === "reconnect"
+								? "failed"
+								: "synced"
+					] += 1;
+				}
+			} catch (error) {
+				summary.failed += 1;
+				await this.state.markFailed(
+					row.id,
+					error instanceof Error ? error.message : String(error),
+				);
+			}
+		}
+
+		summary.durationMs = Date.now() - startedAt;
+		return summary;
+	}
 
 	async runDue(): Promise<TickSummary> {
 		const startedAt = Date.now();
@@ -92,8 +136,6 @@ export class MailboxSyncService {
 					},
 					error instanceof Error ? error.stack : String(error),
 				);
-
-				syncError({ error, source: row.source });
 			}
 		}
 

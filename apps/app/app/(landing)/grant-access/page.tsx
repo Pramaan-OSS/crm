@@ -13,13 +13,13 @@ export const instant = false;
 
 const DESCRIPTION = {
 	google:
-		"This CRM reads your Gmail and Calendar so meetings and email threads show up on the right company. It is read-only — nothing is ever sent on your behalf.",
+		"Connecting gives the app full access to your Gmail and access to your Calendar. This app only reads mail threads and meetings onto the right company — it never sends mail from your account.",
 	microsoft:
-		"This CRM reads your Outlook mail so email threads show up on the right company. It is read-only — nothing is ever sent on your behalf.",
+		"Connecting may give the app full access to your Microsoft 365 account. This app only reads Outlook mail onto the right company.",
 } satisfies Record<MailboxProviderId, string>;
 
 const BOTH =
-	"This CRM reads your mail and calendar so meetings and email threads show up on the right company. It is read-only — nothing is ever sent on your behalf.";
+	"Connecting gives the app access to your mail and calendar. This app only reads mail threads and meetings onto the right company.";
 
 export default async function GrantAccessPage() {
 	const { user } = await requireSession();

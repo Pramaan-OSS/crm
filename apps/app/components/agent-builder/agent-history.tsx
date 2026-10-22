@@ -203,8 +203,8 @@ export function AgentRuns({
 						<AlertDialogTitle>Stop this run?</AlertDialogTitle>
 						<AlertDialogDescription>
 							The agent stops where it is and the run is recorded as cancelled.
-							Anything it has already done — a note, a task, a Slack message —
-							stays done.
+							Anything it has already done — a note, a task, an email — stays
+							done.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 

@@ -1,44 +1,43 @@
 "use client";
 
-import { authClient } from "@crm/auth/client";
-import {
-	type MailboxProviderId,
-	MICROSOFT_SYNC_SCOPES,
-	SYNC_SCOPES,
-} from "@crm/auth/scopes";
 import GoogleLogo from "@crm/ui/components/brand-logos/google";
 import MicrosoftLogo from "@crm/ui/components/brand-logos/microsoft";
 import { Button } from "@crm/ui/components/button";
 import { Spinner } from "@crm/ui/components/spinner";
+import { useMutation } from "@tanstack/react-query";
 import type { FC, SVGProps } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { signOutAndRedirect } from "@/lib/sign-out";
+import { useTRPC } from "@/lib/trpc/client";
+import type { RouterOutputs } from "@/lib/trpc/types";
+
+type MailboxProviderId = "google" | "microsoft";
 
 type ProviderGrant = {
 	label: string;
-	scopes: readonly string[];
 	Logo: FC<SVGProps<SVGSVGElement>>;
 };
 
 const PROVIDERS = {
 	google: {
 		label: "Grant Google access",
-		scopes: [...SYNC_SCOPES],
 		Logo: GoogleLogo,
 	},
 	microsoft: {
 		label: "Grant Microsoft access",
-		scopes: [...MICROSOFT_SYNC_SCOPES],
 		Logo: MicrosoftLogo,
 	},
 } as const satisfies Record<MailboxProviderId, ProviderGrant>;
+
+type ConnectResult = RouterOutputs["google"]["connect"];
 
 export function GrantAccess({
 	providers,
 }: {
 	providers: readonly MailboxProviderId[];
 }) {
+	const trpc = useTRPC();
 	const [pending, setPending] = useState<MailboxProviderId | null>(null);
 
 	function fail(message?: string) {
@@ -46,19 +45,47 @@ export function GrantAccess({
 		toast.error(message ?? "Could not reach the provider.");
 	}
 
-	async function handleGrant(provider: MailboxProviderId) {
+	// Mailbox access connects through the platform's hosted sign-in link: the
+	// API starts it, the browser goes there, and the CRM picks the connection
+	// up on return.
+	const googleConnect = useMutation(
+		trpc.google.connect.mutationOptions({
+			onSuccess: (result: ConnectResult) => {
+				if (result.connectUrl) {
+					window.location.assign(result.connectUrl);
+					return;
+				}
+				fail(result.error ?? undefined);
+			},
+			onError: (error) => fail(error.message),
+		}),
+	);
+	const microsoftConnect = useMutation(
+		trpc.microsoft.connect.mutationOptions({
+			onSuccess: (result: ConnectResult) => {
+				if (result.connectUrl) {
+					window.location.assign(result.connectUrl);
+					return;
+				}
+				fail(result.error ?? undefined);
+			},
+			onError: (error) => fail(error.message),
+		}),
+	);
+
+	function handleGrant(provider: MailboxProviderId) {
 		setPending(provider);
-
 		const origin = window.location.origin;
-
-		const { error } = await authClient.linkSocial({
-			provider,
-			scopes: [...PROVIDERS[provider].scopes],
-			callbackURL: `${origin}/`,
-			errorCallbackURL: `${origin}/grant-access`,
-		});
-
-		if (error) fail(error.message);
+		if (provider === "google") {
+			googleConnect.mutate({
+				source: "gmail",
+				redirectUrl: `${origin}/grant-access`,
+			});
+		} else {
+			microsoftConnect.mutate({
+				redirectUrl: `${origin}/grant-access`,
+			});
+		}
 	}
 
 	const single = providers.length === 1;
@@ -72,9 +99,13 @@ export function GrantAccess({
 					<Button
 						key={provider}
 						className="w-full"
-						disabled={pending !== null}
+						disabled={
+							googleConnect.isPending ||
+							microsoftConnect.isPending ||
+							(pending !== null && pending !== provider)
+						}
 						onClick={() => {
-							handleGrant(provider).catch(() => fail());
+							handleGrant(provider);
 						}}
 						type="button"
 					>

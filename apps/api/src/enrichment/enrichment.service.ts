@@ -1,3 +1,4 @@
+import { companyLogoProps } from "@crm/db/images";
 import type { Db, Prisma } from "@crm/db";
 import { ENRICHMENT_PAGE, pageSize } from "@crm/validation/enrichment-queue";
 import { Injectable } from "@nestjs/common";
@@ -51,11 +52,14 @@ const TASK_SELECT = {
 	id: true,
 	contactId: true,
 	companyId: true,
+	dealId: true,
 	kind: true,
 	attempts: true,
 	leasedUntil: true,
 	startedAt: true,
 	dueAt: true,
+	finishedAt: true,
+	outcome: true,
 } as const;
 
 type QueuedTask = {
@@ -67,6 +71,8 @@ type QueuedTask = {
 	leasedUntil: Date | null;
 	startedAt: Date | null;
 	dueAt: Date;
+	finishedAt: Date | null;
+	outcome: string | null;
 };
 
 @Injectable()
@@ -92,7 +98,7 @@ export class EnrichmentService {
 			dueAt: { gt: now },
 		};
 
-		const [tasks, total, booked, scheduledTotal] = await Promise.all([
+		let [tasks, total, booked, scheduledTotal] = await Promise.all([
 			this.db.agentTask.findMany({
 				where: dueWhere,
 				orderBy: [{ priority: "desc" }, { dueAt: "asc" }],
@@ -165,9 +171,9 @@ export class EnrichmentService {
 					kind: "company" as const,
 					id: company.id,
 					name: company.name,
-					logoUrl: company.iconUrl ?? company.logoUrl,
-					logoDarkUrl: company.iconDarkUrl ?? company.logoDarkUrl,
-					logoTone: company.iconTone,
+					logoUrl: companyLogoProps(company).src,
+					logoDarkUrl: companyLogoProps(company).darkSrc,
+					logoTone: companyLogoProps(company).tone,
 				},
 			]),
 		);
@@ -178,6 +184,28 @@ export class EnrichmentService {
 				: task.companyId
 					? companyById.get(task.companyId)
 					: undefined;
+
+		// A queued task whose record was deleted can never run: close it here,
+		// without a model call, instead of letting it sit in the queue forever.
+		const orphaned = everyTask.filter(
+			(task) => task.finishedAt === null && !subjectOf(task),
+		);
+		if (orphaned.length > 0) {
+			await this.db.agentTask.updateMany({
+				where: { id: { in: orphaned.map((task) => task.id) } },
+				data: {
+					finishedAt: now,
+					outcome: "The record was deleted before this could run.",
+				},
+			});
+		}
+
+		// The counts above ran before the orphans were closed; keep this
+		// response honest by taking them back out.
+		const closedDue = orphaned.filter((task) => task.dueAt <= now).length;
+		const closedScheduled = orphaned.length - closedDue;
+		total = Math.max(0, total - closedDue);
+		scheduledTotal = Math.max(0, scheduledTotal - closedScheduled);
 
 		const rows: EnrichmentQueueRow[] = [];
 
@@ -190,7 +218,7 @@ export class EnrichmentService {
 			rows.push({
 				id: task.id,
 				state,
-				line: enrichmentQueueLine(state, task.kind),
+				line: enrichmentQueueLine(state, task.kind, task.outcome),
 				startedAt: task.startedAt?.toISOString() ?? null,
 				subject,
 			});

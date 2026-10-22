@@ -4,38 +4,43 @@
 
 import { type Db } from "@crm/db";
 import {
+	type Caps,
 	idempotencyKey,
 	type JsonObject,
 	type JsonValue,
 	type Pramaan,
 } from "@crm/pramaan";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { z } from "zod";
 import { InjectDatabase } from "../database/database.constants";
 import { InjectPramaan, PRAMAAN } from "./pramaan.constants";
 
 export const APP_GMAIL = "gmail";
-export const APP_GOOGLE_CALENDAR = "google_calendar";
+// Pramaan's app slugs, as apps.connection.start and apps.connections.list name them.
+export const APP_GOOGLE_CALENDAR = "googlecalendar";
 export const APP_OUTLOOK = "outlook";
 
 export type AppsConnectionStatus = "active" | "pending" | "failed" | "none";
 
 const LIST_CACHE_MS = 60_000;
 
-const CATALOG_CACHE_MS = 10 * 60_000;
+const CATALOG_CACHE_MS = 24 * 60 * 60_000;
 
 @Injectable()
 export class AppsConnectionService {
 	private readonly logger = new Logger(AppsConnectionService.name);
 
-	private listCache: {
-		at: number;
-		rows: Map<string, AppsConnectionStatus>;
-	} | null = null;
+	// Per rep: one rep's connections must never answer for another's.
+	private readonly listCache = new Map<
+		string,
+		{ at: number; rows: Map<string, AppsConnectionStatus> }
+	>();
 
-	private catalogCache: {
-		at: number;
-		actions: Map<string, string>;
-	} | null = null;
+	private readonly catalogPages = new Map<
+		string,
+		{ at: number; page: Promise<Caps.AppsCatalogSearchResult> }
+	>();
+	private readonly discovered = new Map<string, Set<string>>();
 
 	constructor(
 		@Optional()
@@ -81,8 +86,9 @@ export class AppsConnectionService {
 		if (!this.api) return new Map();
 
 		const now = Date.now();
-		if (this.listCache && now - this.listCache.at < LIST_CACHE_MS) {
-			return this.filterCached(this.listCache.rows, apps);
+		const cached = this.listCache.get(userId);
+		if (cached && now - cached.at < LIST_CACHE_MS) {
+			return this.filterCached(cached.rows, apps);
 		}
 
 		try {
@@ -102,7 +108,7 @@ export class AppsConnectionService {
 				);
 			}
 
-			this.listCache = { at: now, rows };
+			this.listCache.set(userId, { at: now, rows });
 			return this.filterCached(rows, apps);
 		} catch (error) {
 			this.logger.warn({
@@ -126,12 +132,11 @@ export class AppsConnectionService {
 		}
 
 		try {
-			const response = await this.api.appsConnectionStart({
-				endUserRef: this.endUserRef(userId),
-				app,
-				redirectUrl,
-			});
-			this.listCache = null;
+			const response = await this.api.appsConnectionStart(
+				{ endUserRef: this.endUserRef(userId), app, redirectUrl },
+				{ idempotencyKey: idempotencyKey() },
+			);
+			this.listCache.delete(userId);
 			return { connectUrl: response.connectUrl };
 		} catch (error) {
 			return {
@@ -152,7 +157,7 @@ export class AppsConnectionService {
 				{ idempotencyKey: idempotencyKey() },
 			);
 		} finally {
-			this.listCache = null;
+			this.listCache.delete(userId);
 		}
 	}
 
@@ -177,7 +182,7 @@ export class AppsConnectionService {
 			};
 		}
 
-		const handle = await this.actionHandle(toolkit, action);
+		const handle = await this.actionHandle(userId, toolkit, action);
 		if (!handle) {
 			return {
 				outcome: "failed",
@@ -187,11 +192,17 @@ export class AppsConnectionService {
 		}
 
 		try {
-			const response = await this.api.appsActionExecute({
-				endUserRef: this.endUserRef(userId),
-				action: handle,
-				input,
-			});
+			const response = await this.api.appsActionExecute(
+				{
+					// Mail readers already carry the connected end-user reference.
+					endUserRef: userId.startsWith("crm-")
+						? userId
+						: this.endUserRef(userId),
+					action: handle,
+					input,
+				},
+				{ idempotencyKey: idempotencyKey() },
+			);
 
 			if (response.status !== "succeeded") {
 				return {
@@ -211,72 +222,140 @@ export class AppsConnectionService {
 		}
 	}
 
-	/** The action's handle inside the catalogue, e.g. `GMAIL_FETCH_EMAILS`. */
+	/** Use history only when the catalogue supplies a read-only action and usable fields. */
+	async gmailHistory(
+		userId: string,
+		startHistoryId: string,
+		pageToken?: string,
+	): Promise<JsonValue | null> {
+		if (!this.api || !/^\d+$/.test(startHistoryId)) return null;
+		try {
+			const page = await this.discoverActions(`sync:${userId}`, {
+				query: "GMAIL_LIST_HISTORY",
+				app: "gmail",
+			});
+			const action = page.results.find(
+				(row) =>
+					row.app.toLowerCase() === "gmail" &&
+					row.action === "GMAIL_LIST_HISTORY" &&
+					row.readOnly === true,
+			);
+			if (!action?.inputSchema || typeof action.inputSchema !== "object")
+				return null;
+			const schema = action.inputSchema as {
+				properties?: Record<string, unknown>;
+			};
+			const properties = schema.properties ?? {};
+			const start = ["startHistoryId", "start_history_id"].find(
+				(key) => key in properties,
+			);
+			const token = ["pageToken", "page_token"].find(
+				(key) => key in properties,
+			);
+			if (!start || (pageToken && !token)) return null;
+			const input = {
+				[start]: startHistoryId,
+				...(pageToken && token ? { [token]: pageToken } : {}),
+			};
+			// Do not guess required account fields or send catalogue defaults/samples.
+			const validated = z
+				.fromJSONSchema(action.inputSchema as z.core.JSONSchema.JSONSchema)
+				.safeParse(input);
+			if (!validated.success) return null;
+			const result = await this.executeAction(
+				userId,
+				"gmail",
+				action.action,
+				input,
+			);
+			return result.outcome === "ok" ? result.output : null;
+		} catch {
+			return null;
+		}
+	}
+
+	/** One paid page on explicit demand, scoped to the caller's authenticated session. */
+	async discoverActions(
+		session: string,
+		input: Caps.AppsCatalogSearchRequest,
+	): Promise<Caps.AppsCatalogSearchResult> {
+		if (!this.api)
+			throw new Error("Set a Pramaan key before discovering actions.");
+		const key = JSON.stringify([
+			session,
+			input.query,
+			input.app ?? "",
+			input.limit ?? 10,
+			input.cursor ?? "",
+		]);
+		const cached = this.catalogPages.get(key);
+		if (cached && Date.now() - cached.at < CATALOG_CACHE_MS) return cached.page;
+		const page = this.api
+			.appsCatalogSearch(input, { idempotencyKey: idempotencyKey() })
+			.then((result) => {
+				for (const row of result.results) {
+					const app = row.app.toLowerCase();
+					const handles = this.discovered.get(app) ?? new Set<string>();
+					handles.add(row.action);
+					this.discovered.set(app, handles);
+				}
+				return result;
+			})
+			.catch(() => {
+				this.catalogPages.delete(key);
+				throw new Error("Could not discover actions. Try later.");
+			});
+		if (this.catalogPages.size >= 500)
+			this.catalogPages.delete(this.catalogPages.keys().next().value!);
+		this.catalogPages.set(key, { at: Date.now(), page });
+		return page;
+	}
+
+	/** Parse only the platform file handle returned by a successful download action. */
+	async readDownloadedFile(
+		output: JsonValue,
+	): Promise<Caps.DocumentParseResult> {
+		const fileId =
+			output && typeof output === "object" && !Array.isArray(output)
+				? output.fileId
+				: null;
+		if (typeof fileId !== "string" || !fileId)
+			throw new Error("This action did not return a platform file handle.");
+		if (!this.api)
+			throw new Error("Set a Pramaan key before reading this file.");
+		return this.api.documentParse({ fileId });
+	}
+
 	private async actionHandle(
+		session: string,
 		toolkit: string,
 		action: string,
 	): Promise<string | null> {
-		const actions = await this.catalogue(toolkit);
-		return actions.get(action) ?? null;
-	}
+		const find = () =>
+			[...(this.discovered.get(toolkit.toLowerCase()) ?? [])].find(
+				(handle) =>
+					handle.toLowerCase() === action.toLowerCase() ||
+					handle.toLowerCase().includes(action.toLowerCase()),
+			) ?? null;
+		const cached = find();
+		if (cached) return cached;
 
-	private async catalogue(toolkit: string): Promise<Map<string, string>> {
-		const now = Date.now();
-		if (this.catalogCache && now - this.catalogCache.at < CATALOG_CACHE_MS) {
-			return this.prefix(this.catalogCache.actions, toolkit);
+		// The catalogue pages alphabetically: walk pages until the wanted
+		// handle shows up or the catalogue runs out.
+		let cursor: string | undefined;
+		for (let page = 0; page < 5; page += 1) {
+			const result = await this.discoverActions(`sync:${session}`, {
+				query: action,
+				app: toolkit,
+				limit: 50,
+				...(cursor ? { cursor } : {}),
+			});
+			if (find()) return find();
+			cursor = result.nextCursor;
+			if (!cursor) break;
 		}
 
-		if (!this.api) return new Map();
-
-		try {
-			// apps.catalog.search is read through the raw client: it is platform
-			// machinery, not one of the product's wrapped capabilities.
-			const response = await this.api.raw
-				.call("apps.catalog.search", { query: toolkit })
-				.catch(() => null);
-
-			const actions = new Map<string, string>();
-			const results =
-				(
-					response as {
-						results?: ReadonlyArray<{
-							name?: string;
-							toolkit?: string;
-							handle?: string;
-							slug?: string;
-						}>;
-					} | null
-				)?.results ?? [];
-
-			for (const row of results) {
-				if (
-					!row?.toolkit ||
-					row.toolkit.toLowerCase() !== toolkit.toLowerCase()
-				) {
-					continue;
-				}
-				const handle = row.handle ?? row.slug;
-				if (handle && row.name) actions.set(row.name, handle);
-			}
-
-			this.catalogCache = { at: now, actions };
-			return this.prefix(actions, toolkit);
-		} catch {
-			return new Map();
-		}
-	}
-
-	private prefix(
-		rows: Map<string, string>,
-		toolkit: string,
-	): Map<string, string> {
-		if (!toolkit) return rows;
-		const out = new Map<string, string>();
-		for (const [key, value] of rows) {
-			if (key.toLowerCase().includes(toolkit.toLowerCase()))
-				out.set(key, value);
-		}
-		return out;
+		return null;
 	}
 
 	private filterCached(

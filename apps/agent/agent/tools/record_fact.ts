@@ -8,7 +8,7 @@ import { assertResearchPurpose } from "../lib/session-purpose";
 
 export default defineTool({
 	description:
-		"Record one claim about a contact — title, employer, a profile URL, seniority — together with the evidence for it. The evidence decides whether it is written to the record or offered to a rep as a suggestion. Never invent evidence you did not observe.",
+		"Record a contact claim with observed evidence. Evidence determines a saved value or suggestion; never invent it.",
 	inputSchema: z.object({
 		contactId: z.string(),
 		field: z

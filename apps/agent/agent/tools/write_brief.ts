@@ -10,7 +10,7 @@ const MAX_NARRATIVE = 400;
 
 export default defineTool({
 	description:
-		"Write the Background panel on a contact: a short narrative plus the structured lines under it. Replaces the previous one. Every claim must come from something you read.",
+		"Replace a contact background with an evidence-based narrative and structured sections.",
 	inputSchema: z.object({
 		contactId: z.string(),
 		narrative: z

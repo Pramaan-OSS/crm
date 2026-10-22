@@ -4,7 +4,7 @@ import { searchCrm } from "../lib/lookup";
 
 export default defineTool({
 	description:
-		"Find contacts, companies and deals by name, email address, domain or deal name — the way a person would search. Returns each match with its id, so you never have to ask a rep for one. Free. Use it whenever a question names a record you do not have the id for.",
+		"Find contacts, companies or deals by name, email or domain. Resolve named records here instead of asking a rep for an id.",
 	inputSchema: z.object({
 		query: z
 			.string()

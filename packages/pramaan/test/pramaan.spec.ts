@@ -10,8 +10,35 @@ import { PramaanError } from "../src/sdk/errors.ts";
 
 describe("pramaanFromEnv", () => {
 	test("returns null without a key", () => {
-		expect(pramaanFromEnv({})).toBeNull();
-		expect(pramaanFromEnv({ PRAMAAN_API_KEY: "  " })).toBeNull();
+		const saved = process.env.PRAMAAN_API_KEY;
+		delete process.env.PRAMAAN_API_KEY;
+		try {
+			expect(pramaanFromEnv()).toBeNull();
+			process.env.PRAMAAN_API_KEY = "  ";
+			expect(pramaanFromEnv()).toBeNull();
+		} finally {
+			if (saved !== undefined) process.env.PRAMAAN_API_KEY = saved;
+			else delete process.env.PRAMAAN_API_KEY;
+		}
+	});
+
+	test("PRAMAAN_FAKE=1 answers without the network", async () => {
+		const savedKey = process.env.PRAMAAN_API_KEY;
+		const savedFake = process.env.PRAMAAN_FAKE;
+		process.env.PRAMAAN_API_KEY = "dummy-key-for-a-smoke-test";
+		process.env.PRAMAAN_FAKE = "1";
+		try {
+			const client = pramaanFromEnv();
+			expect(client).not.toBeNull();
+			await expect(client?.webSearch({ query: "crm" })).rejects.toThrow(
+				/Could not reach/,
+			);
+		} finally {
+			if (savedKey !== undefined) process.env.PRAMAAN_API_KEY = savedKey;
+			else delete process.env.PRAMAAN_API_KEY;
+			if (savedFake !== undefined) process.env.PRAMAAN_FAKE = savedFake;
+			else delete process.env.PRAMAAN_FAKE;
+		}
 	});
 
 	test("builds a client from a key, and honours a base url", async () => {
@@ -34,7 +61,7 @@ describe("pramaanFromEnv", () => {
 		expect(out.results[0]?.title).toBe("t");
 		const request = seen as unknown as { url: string; init: RequestInit };
 		expect(request.url).toBe("https://pramaan.test/v1/capabilities/web.search");
-		expect((request.init.headers as Record<string, string>).Authorization).toBe(
+		expect(new Headers(request.init.headers).get("Authorization")).toBe(
 			"Bearer sk_live_test",
 		);
 	});
@@ -67,26 +94,32 @@ describe("pramaanFromEnv", () => {
 		expect(attempts).toBe(1);
 	});
 
-	test("sends an idempotency key when one is given", async () => {
-		let seenKey: string | null = null;
-		const p = createPramaan({
-			apiKey: "k",
-			fetch: async (_url, init) => {
-				seenKey = new Headers(init.headers).get("Idempotency-Key");
-				return new Response(JSON.stringify({ status: "queued" }), {
-					status: 200,
-				});
-			},
-		});
-		await p.emailSend(
-			{ from: "a@b.c", to: "d@e.f", subject: "s", text: "x" },
-			{ idempotencyKey: idempotencyKey() },
-		);
-		expect(seenKey).toEqual(expect.any(String));
-	});
-});
+	test("Pramaan-Fresh is sent only when fresh is set", async () => {
+		const seen: (string | undefined)[] = [];
+		const make = (fresh: boolean) =>
+			createPramaan({
+				apiKey: "k",
+				fetch: async (_url, init) => {
+					seen.push(
+						new Headers(init.headers).get("Pramaan-Fresh") ?? undefined,
+					);
+					return new Response(
+						JSON.stringify({
+							results: [{ title: "t", url: "u", snippet: "s" }],
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					);
+				},
+			});
 
-describe("FakePramaan", () => {
+		const person = make(true);
+		await person.webSearch({ query: "fresh" }, { fresh: true });
+		const background = make(false);
+		await background.webSearch({ query: "cached" });
+
+		expect(seen[0]).toBe("1");
+		expect(seen[1]).toBeUndefined();
+	});
 	test("routes calls and records them", async () => {
 		const fake = new FakePramaan({
 			[Cap.companiesEnrich]: () => ({

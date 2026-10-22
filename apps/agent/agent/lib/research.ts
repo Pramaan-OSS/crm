@@ -3,6 +3,7 @@
 // `ask()` shape callers know is kept.
 
 import { text as answerText, type Caps } from "@crm/pramaan";
+import { currentFresh } from "./focus";
 import { pramaan, pramaanEnabled } from "./pramaan";
 
 export type Answer = {
@@ -37,6 +38,7 @@ export async function ask(
 
 	try {
 		const response = await api.webAnswers({
+			...(currentFresh() ? { fresh: true } : {}),
 			task: options.system ? `${options.system}\n\n${question}` : question,
 			mode: options.mode ?? "fast",
 		});

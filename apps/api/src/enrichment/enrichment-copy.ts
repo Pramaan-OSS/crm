@@ -20,6 +20,8 @@ const STEP_BY_KIND = new Map<string, string>(Object.entries(STEPS));
 const UNKNOWN_STEP = "Looking them up";
 const WAITING = "Waiting";
 const GAVE_UP = "Could not look this up";
+/** What the platform answers when the install's balance cannot cover the step. */
+const CREDIT = "Not enough credit — top up to continue";
 
 const SECOND_MS = 1_000;
 const DAY_MS = 24 * 60 * 60 * SECOND_MS;
@@ -50,9 +52,13 @@ export function enrichmentQueueState(
 export function enrichmentQueueLine(
 	state: EnrichmentQueueState,
 	kind: string,
+	outcome?: string | null,
 ): string {
 	if (state === "queued") return WAITING;
-	if (state === "failed") return GAVE_UP;
+	if (state === "failed") {
+		if (outcome && /not enough credit/i.test(outcome)) return CREDIT;
+		return GAVE_UP;
+	}
 
 	return enrichmentStep(kind);
 }

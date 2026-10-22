@@ -8,7 +8,7 @@ import { assertResearchPurpose } from "../lib/session-purpose";
 
 export default defineTool({
 	description:
-		"Put a verified name to a CRM contact, with the evidence for it. Strong evidence writes the name; anything less becomes a suggestion for a rep. Never overwrites a name a person supplied.",
+		"Identify a contact from observed evidence; weaker matches become suggestions. Preserve human-entered names.",
 	inputSchema: z.object({
 		contactId: z.string(),
 		fullName: z.string().describe("Exactly as the source writes it."),

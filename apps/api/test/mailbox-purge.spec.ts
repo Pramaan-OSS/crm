@@ -22,7 +22,7 @@ const theirs = `theirs-${suffix}`;
 const roots = [shared, solo, theirs];
 
 // Connected apps, faked: a rep connects by marking the app active. No network.
-const connectedApps = new Set<string>(["gmail", "google_calendar", "outlook"]);
+const connectedApps = new Set<string>(["gmail", "googlecalendar", "outlook"]);
 const revokedApps: string[] = [];
 
 const apps = {
@@ -32,7 +32,7 @@ const apps = {
 		connectedApps.has(app) ? "active" : "none",
 	listStatuses: async (_userId: string, only?: readonly string[]) => {
 		const rows = new Map<string, string>();
-		for (const app of only ?? ["gmail", "google_calendar", "outlook"]) {
+		for (const app of only ?? ["gmail", "googlecalendar", "outlook"]) {
 			if (connectedApps.has(app)) rows.set(app, "active");
 		}
 		return rows;
@@ -377,7 +377,7 @@ describe("disconnecting Google", () => {
 
 	async function connect() {
 		connectedApps.add("gmail");
-		connectedApps.add("google_calendar");
+		connectedApps.add("googlecalendar");
 		await state.ensure(gmailRep, "gmail", { autoCreate: false });
 		await state.ensure(gmailRep, "calendar", { autoCreate: true });
 	}
@@ -399,7 +399,7 @@ describe("disconnecting Google", () => {
 		}
 
 		expect(calls).toBe(0);
-		expect(revokedApps.sort()).toEqual(["gmail", "google_calendar"]);
+		expect(revokedApps.sort()).toEqual(["gmail", "googlecalendar"]);
 		expect((await google.status(gmailRep)).linked).toBe(false);
 	});
 

@@ -7,7 +7,7 @@ import { personByProfileUrl } from "../lib/people";
 
 export default defineTool({
 	description:
-		"Read the LinkedIn profile already on a CRM contact — bio, current role and full work history. For writing a summary of somebody already identified. Cannot be used to identify anyone: use resolve_linkedin_profile and get_linkedin_profile for that.",
+		"Read a known contact's LinkedIn biography and work history; not an identity check.",
 	inputSchema: z.object({
 		contactId: z.string(),
 	}),

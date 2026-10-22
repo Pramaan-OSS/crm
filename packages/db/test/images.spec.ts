@@ -12,6 +12,27 @@ afterEach(() => {
 });
 
 describe("isMirrored", () => {
+	it("recognizes database company logos as private local images", () => {
+		expect(
+			isMirrored("https://app.example.test/api/company-logos/company1"),
+		).toBe(true);
+		expect(
+			isMirrored("https://other.example.test/api/company-logos/company1"),
+		).toBe(false);
+		expect(
+			isOptimizable("https://app.example.test/api/company-logos/company1"),
+		).toBe(false);
+	});
+
+	it("recognises private workspace logos without routing them through the image optimizer", () => {
+		const path = "/api/logo-files/file_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+		expect(isMirrored(`https://app.example.test${path}`)).toBe(true);
+		expect(isMirrored(`https://other.example.test${path}`)).toBe(false);
+		expect(
+			isMirrored("https://app.example.test/api/logo-files/file_invalid"),
+		).toBe(false);
+		expect(isOptimizable(`https://app.example.test${path}`)).toBe(false);
+	});
 	it("recognises our own store, so a re-run does not re-upload", () => {
 		expect(isMirrored(`${OURS}/contacts/c1-9f8e.jpg`)).toBe(true);
 	});
@@ -55,7 +76,7 @@ describe("isOptimizable", () => {
 	});
 
 	it("refuses anything we did not mint, whatever its extension", () => {
-		expect(isOptimizable("https://cdn.context.dev/logo.png")).toBe(false);
+		expect(isOptimizable("https://cdn.example.com/logo.png")).toBe(false);
 		expect(isOptimizable("https://lh3.googleusercontent.com/a/x.jpg")).toBe(
 			false,
 		);

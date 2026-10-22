@@ -18,7 +18,12 @@ const SECTIONS = ["/companies", "/contacts", "/deals", "/settings"];
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
 
-	if (pathname === SIGN_IN_PATH) return NextResponse.next();
+	// The whole sign-in flow is pre-auth: the managed backend's return page
+	// must render before the local session exists, or nobody can finish
+	// signing in (it would bounce back here, unsigned).
+	if (pathname === SIGN_IN_PATH || pathname.startsWith(`${SIGN_IN_PATH}/`)) {
+		return NextResponse.next();
+	}
 
 	if (isAnonymous(pathname)) return NextResponse.next();
 

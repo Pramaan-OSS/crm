@@ -2,9 +2,10 @@
 // structured facts from one page, and web search. This module replaces the old vendor client;
 // the shapes it hands back are kept, so its callers read the same as before.
 
-import type { Caps } from "@crm/pramaan";
+import type { Caps, Pramaan } from "@crm/pramaan";
 import { z } from "zod";
 import { CONTEXT } from "./context-config";
+import { currentFresh } from "./focus";
 import { pramaan } from "./pramaan";
 
 export type JsonSchema = {
@@ -59,8 +60,8 @@ export function contextEnabled(): boolean {
 export async function brandByDomain(
 	domain: string,
 	_maxAgeMs?: number,
+	api: Pramaan | null = pramaan(),
 ): Promise<LookupResult> {
-	const api = pramaan();
 	if (!api) {
 		return { outcome: "skipped", reason: "Pramaan is not configured." };
 	}
@@ -137,6 +138,7 @@ export async function extract(
 
 	try {
 		const response = await api.webExtract({
+			...(currentFresh() ? { fresh: true } : {}),
 			url,
 			schema,
 			prompt: instructions,

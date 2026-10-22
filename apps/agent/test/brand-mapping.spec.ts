@@ -126,7 +126,7 @@ describe("stillFillable", () => {
 		expect(data.industry).toBe("Finance");
 	});
 
-	it("keeps the icon, which the agent owns rather than shares", () => {
+	it("preserves an existing icon like every other filled company field", () => {
 		const update = brandToUpdate(
 			{ logoUrl: "https://cdn/logo.svg" },
 			emptyCompany(),
@@ -137,7 +137,7 @@ describe("stillFillable", () => {
 			emptyCompany({ iconUrl: "https://acme.test/favicon.ico" }),
 		);
 
-		expect(data.iconUrl).toBe("https://cdn/logo.svg");
+		expect(data.iconUrl).toBeUndefined();
 	});
 
 	it("drops the name once the placeholder has been answered", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { companyLogoProps } from "@crm/db/images";
 import { Button } from "@crm/ui/components/button";
 import {
 	Card,
@@ -13,10 +14,7 @@ import {
 import { CardTableEmpty } from "@crm/ui/components/card-table";
 import { Checkbox } from "@crm/ui/components/checkbox";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
-import {
-	EntityLogo,
-	type EntityLogoTone,
-} from "@crm/ui/components/entity-logo";
+import { EntityLogo } from "@crm/ui/components/entity-logo";
 import {
 	SimpleTable,
 	type SimpleTableColumn,
@@ -334,6 +332,8 @@ function DealCell({
 	name: string;
 	company: {
 		name: string;
+		logoUrl: string | null;
+		logoDarkUrl: string | null;
 		iconUrl: string | null;
 		iconDarkUrl: string | null;
 		iconTone: string | null;
@@ -343,9 +343,7 @@ function DealCell({
 	return (
 		<span className="flex min-w-0 items-center gap-2">
 			<EntityLogo
-				src={company.iconUrl}
-				darkSrc={company.iconDarkUrl}
-				tone={company.iconTone as EntityLogoTone | null | undefined}
+				{...companyLogoProps(company)}
 				name={company.name}
 				size="sm"
 			/>

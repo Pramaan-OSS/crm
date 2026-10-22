@@ -15,7 +15,6 @@ export const E2E = {
 		domainPrefix: "load-",
 		domainSuffix: ".test",
 		defaultCount: 300,
-		drainPassSlack: 5,
 	},
 
 	retry: {
@@ -27,11 +26,6 @@ export const E2E = {
 		leaseMs: 5 * MINUTE_MS,
 		expiredLeaseMs: MINUTE_MS,
 		holdBackMs: 30 * SECOND_MS,
-	},
-
-	slackJoin: {
-		bogusChannelId: "C00NOTREAL99",
-		bogusChannelName: "missing",
 	},
 
 	liveRun: {

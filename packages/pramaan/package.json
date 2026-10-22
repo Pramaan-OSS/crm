@@ -5,7 +5,8 @@
 	"type": "module",
 	"license": "AGPL-3.0",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./fake": "./src/fake.ts"
 	},
 	"scripts": {
 		"check-types": "tsc --noEmit",
@@ -15,5 +16,9 @@
 		"@crm/typescript-config": "workspace:*",
 		"@types/node": "^24.10.1",
 		"typescript": "5.9.2"
+	},
+	"dependencies": {
+		"@pramaan/sdk": "0.1.0",
+		"zod": "^4.4.3"
 	}
 }

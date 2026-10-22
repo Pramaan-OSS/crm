@@ -27,6 +27,8 @@ from a message. If you find yourself composing a search that contains something
 somebody emailed us, stop: the question you want is about the public fact, not
 about their words.
 
+The approved prepare_meeting flow is a separate exception: it sends bounded local correspondence and deal history only as meeting.brief privateContext, after the person sees the estimate and agrees. That context is caller-supplied, not independently verified research. Never paste it into a public search.
+
 **2. Nothing from a mailbox goes into `/workspace`.** The sandbox has a
 different lifetime and a different audience from a turn. Dossiers of public
 profile data are what it is for. Message bodies stay in the conversation.

@@ -1,4 +1,5 @@
 "use client";
+import { ResearchEstimate } from "./research-estimate";
 
 import Checkmark from "@carbon/icons-react/es/Checkmark";
 import CircleDash from "@carbon/icons-react/es/CircleDash";
@@ -76,7 +77,11 @@ import {
 	toTranscript,
 } from "@/lib/agent-transcript";
 import { useTRPC } from "@/lib/trpc/client";
+import { useResearchStatus } from "@/lib/use-research-status";
 import { useRecordSheetView } from "./record-sheet/record-stack";
+
+/** How long a turn may sit with no message before it counts as never started. */
+const RUN_NEVER_STARTED_MS = 20_000;
 
 export function AgentPanel({ record }: { record: AgentRecord }) {
 	const conversations = useConversations(recordFilter(record));
@@ -224,11 +229,26 @@ function Thread({
 	const busy = agent.status === "submitted" || agent.status === "streaming";
 	const messages = toTranscript(agent.data.messages);
 	const question = pendingQuestion(agent.data.messages);
+	const research = useResearchStatus();
+
+	// A run that never starts (the agent is down, or the bridge is not configured)
+	// must surface as a message instead of "Thinking" forever.
+	const [neverStarted, setNeverStarted] = useState(false);
+	const messageCount = messages.length;
+	useEffect(() => {
+		if (!busy || messageCount > 0) {
+			setNeverStarted(false);
+			return;
+		}
+		const timer = setTimeout(() => setNeverStarted(true), RUN_NEVER_STARTED_MS);
+		return () => clearTimeout(timer);
+	}, [busy, messageCount]);
+	const gated = research.blocked || neverStarted;
 
 	const { locked, ended } = composerState(thread, busy);
 
 	const ask = (message: string) => {
-		if (!message.trim() || locked) return;
+		if (!message.trim() || locked || gated) return;
 		opening.current ||= message.trim();
 		setDraft("");
 		void agent.send({ message: message.trim() });
@@ -265,6 +285,18 @@ function Thread({
 
 			{agent.error ? <Failure message={agent.error.message} /> : null}
 
+			{research.blocked ? (
+				<div
+					role="alert"
+					className="mx-4 mt-3 rounded-lg border border-destructive/30 bg-card px-3 py-2 text-xs"
+				>
+					{research.message}
+				</div>
+			) : null}
+			{neverStarted ? (
+				<Failure message="The run never started. Check that the research agent is running and that AGENT_BRIDGE_SECRET is set on the API." />
+			) : null}
+
 			{thread?.status === "working" && !busy ? (
 				<p className="border-t px-4 py-2 text-pretty text-muted-foreground text-xs sm:px-5">
 					Still working on the last question. Your next one can go in when it
@@ -284,13 +316,22 @@ function Thread({
 			) : null}
 
 			<div className="border-t px-4 py-3 sm:px-5">
-				{question ? (
+				{research.blocked ? (
+					<p
+						role="alert"
+						className="border-t border-0 text-pretty text-muted-foreground text-xs"
+					>
+						{research.message}
+					</p>
+				) : question ? (
 					<AgentClarificationComposer
 						key={question.requestId}
 						question={question}
 						pending={busy}
 						onSubmit={(response) => agent.send({ inputResponses: [response] })}
 					/>
+				) : neverStarted ? (
+					<Failure message="The run never started. Check that the research agent is running and that AGENT_BRIDGE_SECRET is set on the API." />
 				) : (
 					<form
 						className="flex min-w-0 items-center gap-2"
@@ -433,6 +474,7 @@ function Item({ item }: { item: TranscriptItem }) {
 				<MarkerContent>{item.label}</MarkerContent>
 			</Marker>
 
+			<ResearchEstimate output={item.output} />
 			{item.sources.length > 0 ? <Sources sources={item.sources} /> : null}
 		</div>
 	);

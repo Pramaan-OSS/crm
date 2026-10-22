@@ -479,6 +479,12 @@ const appRouter = t.router({
 })),
 	scheduledTotal: z.number(),
 }))
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),
+    status: publicProcedure
+      .output(z.object({
+	runnable: z.boolean(),
+	reason: z.enum(["bridge", "platform-key"]).nullable(),
+}))
       .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any)
     }),
   fields: t.router({
@@ -582,6 +588,31 @@ const appRouter = t.router({
       .input(setOutlookAutoCreateInput)
       .output(microsoftConnectionStatusOutput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any)
+    }),
+  connectedApps: t.router({
+    status: publicProcedure
+      .output(z.object({ configured: z.boolean() }))
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),
+    actions: publicProcedure
+      .input(z.object({
+	query: z.string().trim().min(1).max(200),
+	app: z.string().min(1).max(100).optional(),
+	cursor: z.string().min(1).max(4000).optional(),
+	limit: z.number().int().min(1).max(50).optional(),
+}))
+      .output(z.object({
+	results: z.array(
+		z.object({
+			app: z.string(),
+			action: z.string(),
+			description: z.string().optional(),
+			readOnly: z.literal(true).optional(),
+			inputSchema: z.unknown().optional(),
+		}),
+	),
+	nextCursor: z.string().optional(),
+}))
+      .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any)
     }),
   savedViews: t.router({
     list: publicProcedure

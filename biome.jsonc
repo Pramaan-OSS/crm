@@ -15,10 +15,7 @@
 			"!**/.next",
 			"!**/dist",
 			"!**/*.svg",
-			"!.claude",
-			"!.agents",
 			"!tools/oxlint/anti-slop",
-			"!skills-lock.json"
 		]
 	},
 	"formatter": {

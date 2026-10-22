@@ -141,4 +141,12 @@ describe("the sign-in page's read", () => {
 
 		expect((await sso.signInOptions()).google).toBe(isGoogleConfigured());
 	});
+
+	it("carries the served app origin, so the page can name a mismatch", async () => {
+		const { sso } = service(null, [OKTA]);
+
+		expect((await sso.signInOptions()).appUrl).toBe(
+			process.env.APP_URL ?? "http://localhost:3000",
+		);
+	});
 });

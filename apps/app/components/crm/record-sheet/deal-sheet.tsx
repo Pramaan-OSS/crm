@@ -1,5 +1,6 @@
 "use client";
 
+import { companyLogoProps } from "@crm/db/images";
 import Add from "@carbon/icons-react/es/Add";
 import Close from "@carbon/icons-react/es/Close";
 import UserMultiple from "@carbon/icons-react/es/UserMultiple";
@@ -7,10 +8,7 @@ import { CURRENCIES, normalizeCurrency } from "@crm/db/currency";
 import type { FieldValueJson } from "@crm/db/fields";
 import { Button } from "@crm/ui/components/button";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
-import {
-	EntityLogo,
-	type EntityLogoTone,
-} from "@crm/ui/components/entity-logo";
+import { EntityLogo } from "@crm/ui/components/entity-logo";
 import { Icon } from "@crm/ui/components/icon";
 import { PersonAvatar } from "@crm/ui/components/person-avatar";
 import { SimpleTable, SimpleTableRow } from "@crm/ui/components/simple-table";
@@ -186,9 +184,7 @@ export function DealSheet({ dealId }: { dealId: string }) {
 			media={
 				deal ? (
 					<EntityLogo
-						src={deal.company.iconUrl}
-						darkSrc={deal.company.iconDarkUrl}
-						tone={deal.company.iconTone as EntityLogoTone | null | undefined}
+						{...companyLogoProps(deal.company)}
 						name={deal.company.name}
 						size="lg"
 					/>

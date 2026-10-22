@@ -1,5 +1,6 @@
 "use client";
 
+import { companyLogoProps } from "@crm/db/images";
 import Email from "@carbon/icons-react/es/Email";
 import Partnership from "@carbon/icons-react/es/Partnership";
 import Star from "@carbon/icons-react/es/Star";
@@ -12,10 +13,7 @@ import {
 } from "@crm/ui/components/accordion";
 import { Button } from "@crm/ui/components/button";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
-import {
-	EntityLogo,
-	type EntityLogoTone,
-} from "@crm/ui/components/entity-logo";
+import { EntityLogo } from "@crm/ui/components/entity-logo";
 import { Icon } from "@crm/ui/components/icon";
 import { PersonAvatar } from "@crm/ui/components/person-avatar";
 import { SimpleTable, SimpleTableRow } from "@crm/ui/components/simple-table";
@@ -59,6 +57,7 @@ import { hasContactLinks } from "@/lib/social-links";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
+import { useResearchStatus } from "@/lib/use-research-status";
 import { RecordActions } from "./record-actions";
 import { DealAmount, MetaLine, RecordSheetFrame } from "./record-parts";
 import { useOpenRecord, useRecordSheetView } from "./record-stack";
@@ -89,11 +88,13 @@ const DEAL_COLUMNS = [
 export function ContactSheet({ contactId }: { contactId: string }) {
 	const trpc = useTRPC();
 	const cache = useCrmCache();
+	const research = useResearchStatus();
 	const { tab, setTab } = useRecordSheetView("overview");
 
 	const query = useQuery({
 		...trpc.contacts.byId.queryOptions({ id: contactId }),
 		refetchInterval: (current) => {
+			if (!research.runnable) return false;
 			const record = current.state.data;
 			return record && isEnriching(record.enrichmentStatus, record.queued)
 				? ENRICHMENT_POLL_MS
@@ -162,7 +163,10 @@ export function ContactSheet({ contactId }: { contactId: string }) {
 							<EnrichmentIndicator
 								status={contact.enrichmentStatus}
 								queued={contact.queued}
-								title={contact.enrichmentError}
+								blocked={research.blocked}
+								title={
+									research.blocked ? research.message : contact.enrichmentError
+								}
 							/>
 						) : null}
 					</>
@@ -274,9 +278,7 @@ function CompanyStat({
 			className="flex min-w-0 items-center gap-2 underline-offset-2 hover:underline"
 		>
 			<EntityLogo
-				src={company.iconUrl}
-				darkSrc={company.iconDarkUrl}
-				tone={company.iconTone as EntityLogoTone | null | undefined}
+				{...companyLogoProps(company)}
 				name={company.name}
 				size="xs"
 			/>

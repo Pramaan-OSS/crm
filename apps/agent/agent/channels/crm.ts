@@ -27,6 +27,10 @@ import {
 } from "../lib/dispatch";
 import { DISPATCH } from "../lib/dispatch-config";
 import { settle } from "../lib/enrichment";
+import {
+	failResearchTask,
+	researchTaskFailureReason,
+} from "../lib/research-task-failure";
 import { finishRun, runResultOf } from "../lib/run-runtime";
 import { attribute } from "../lib/session-purpose";
 import { reconcileStaleTasks } from "../lib/stale-tasks";
@@ -94,14 +98,14 @@ export async function closeTask(
 	return true;
 }
 
-export default defineChannel({
+const crmDefinition = {
 	routes: [
 		GET("/internal/crm/dispatch-health", async (request) => {
 			if (!authorised(request)) {
 				return new Response("Unauthorized", { status: 401 });
 			}
 
-			const health = dispatchHealth();
+			const health = await dispatchHealth();
 			const { db } = await import("@crm/db");
 			const now = new Date();
 			const overdue = await db.agentTask.count({
@@ -233,8 +237,11 @@ export default defineChannel({
 				eveTurnFailure.parse(data).message ?? "The agent turn failed.";
 
 			if (taskId) {
-				const subject = await taskSubject(taskId);
-				if (subject) await settle(subject, EnrichmentStatus.FAILED, reason);
+				const failure = eveTurnFailure.parse(data);
+				await failResearchTask(
+					taskId,
+					researchTaskFailureReason(failure.code, failure.message),
+				);
 				return;
 			}
 
@@ -327,6 +334,14 @@ export default defineChannel({
 		},
 
 		async "session.failed"(data, channel) {
+			const taskId = taskFromToken(channel.continuationToken);
+			if (taskId) {
+				await failResearchTask(
+					taskId,
+					researchTaskFailureReason(data.code, data.message),
+				);
+				return;
+			}
 			const conversationId = builderIdFromToken(channel.continuationToken);
 			if (conversationId) {
 				const { db } = await import("@crm/db");
@@ -366,7 +381,12 @@ export default defineChannel({
 				: `crm:adhoc:${crypto.randomUUID()}`,
 		});
 	},
-});
+} satisfies Parameters<typeof defineChannel<undefined>>[0];
+
+export const crmEvents: NonNullable<
+	Parameters<typeof defineChannel<undefined>>[0]["events"]
+> = crmDefinition.events;
+export default defineChannel(crmDefinition);
 
 function assertInternalDispatchAuth(auth: InternalDispatchPrincipal): void {
 	if (

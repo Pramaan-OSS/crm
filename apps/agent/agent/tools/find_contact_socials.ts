@@ -2,15 +2,17 @@ import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { personForVerification, stampSocialsChecked } from "../lib/crm";
 import { focusOn, spend } from "../lib/focus";
-import { findSocialCandidates } from "../lib/socials";
+import { publicHandles } from "../lib/socials";
 
 export default defineTool({
 	description:
-		"Search the web for a contact's X and GitHub profiles. Returns CANDIDATES ONLY — pass them to set_contact_socials, which re-checks each one against the account itself before writing. Never write these URLs any other way.",
+		"Find public profile handles. Show the estimate and ask approval before calling with confirm and plan. Write verified results through set_contact_socials.",
 	inputSchema: z.object({
 		contactId: z.string(),
+		confirm: z.boolean().optional(),
+		plan: z.string().optional(),
 	}),
-	async execute({ contactId }) {
+	async execute({ contactId, confirm, plan }) {
 		focusOn({ contactId });
 
 		const person = await personForVerification(contactId);
@@ -21,22 +23,17 @@ export default defineTool({
 		const charge = spend(2);
 		if (!charge.ok) return { searched: false as const, reason: charge.reason };
 
-		const [x, github] = await Promise.all([
-			findSocialCandidates(person, "x"),
-			findSocialCandidates(person, "github"),
-		]);
-
+		const result = await publicHandles(person, { confirm, plan });
+		if (result.state !== "done")
+			return { searched: false as const, attempt: result };
 		await stampSocialsChecked(contactId);
-
 		return {
 			searched: true as const,
-			searchedFor: person.fullName,
-			candidates: {
-				x: x.candidates.map((c) => c.url),
-				github: github.candidates.map((c) => c.url),
-			},
-			citations: [...x.citations, ...github.citations],
-			note: "Unverified. set_contact_socials will reject any of these it cannot corroborate, and that is a normal outcome.",
+			handles: result.handles,
+			completeness: result.report.completeness,
+			missing: result.report.missing,
+			evidence: result.report.evidence,
+			note: "Only verified handles with evidence can be written through set_contact_socials.",
 		};
 	},
 });

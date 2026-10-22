@@ -20,7 +20,6 @@ Everything the prototype decided is encoded in three files. When two sources dis
 
 Not a source: `../DESIGN_PROJECTED.md` (the Monad style reference). It was the starting point; its parchment canvas and all-mono UI were replaced on request. Do not import anything from it.
 
-Prototype folder: `/Users/debarghabandyopadhyay/Dev/Rose/pramaan-flow/`. Regenerate screens with `node build.mjs`.
 
 ---
 

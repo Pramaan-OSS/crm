@@ -89,37 +89,15 @@ export class GmailSyncService {
 		}
 
 		if (!row.cursor) {
-			return this.start(row, profile.data.historyId ?? null);
+			return this.incremental(
+				row,
+				token.accessToken,
+				mailbox,
+				new Date(Date.now() - 14 * 86400000).toISOString(),
+			);
 		}
 
 		return this.incremental(row, token.accessToken, mailbox, row.cursor);
-	}
-
-	private async start(
-		row: MailboxSync,
-		historyId: string | null,
-	): Promise<GmailSyncOutcome> {
-		if (!historyId) {
-			await this.state.markFailed(row.id, "Gmail returned no historyId.");
-			return {
-				source: "gmail",
-				userId: row.userId,
-				status: "failed",
-				reason: "No historyId to start from.",
-			};
-		}
-
-		await this.state.settle(row.id, {
-			cursor: historyId,
-			status: GoogleSyncStatus.RUNNING,
-		});
-
-		this.logger.log({
-			message: "Gmail sync started — watching for new mail",
-			userId: row.userId,
-		});
-
-		return { source: "gmail", userId: row.userId, status: "synced" };
 	}
 
 	private async incremental(
@@ -139,7 +117,7 @@ export class GmailSyncService {
 				source: "gmail",
 				userId: row.userId,
 				status: "synced",
-				reason: "History expired; resuming from now.",
+				reason: "History expired; the next tick re-reads the last two weeks.",
 			};
 		}
 
@@ -214,7 +192,7 @@ export class GmailSyncService {
 
 		for (const id of batch) {
 			const message = await this.gmail.getMessage(accessToken, id);
-			if (message.outcome !== "ok") continue;
+			if (message.outcome !== "ok") throw new Error(message.reason);
 
 			const parsed = this.parse(message.data);
 			if (!parsed) continue;

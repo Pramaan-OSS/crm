@@ -52,12 +52,12 @@ describe("verdictFor", () => {
 		expect(verdict.confidence).toBe("high");
 	});
 
-	it("accepts employer and name together", () => {
+	it("keeps employer and name as hints without deciding identity", () => {
 		const verdict = verdictFor(person(), CLAIM);
 
 		expect(verdict.employerMatches).toBe(true);
 		expect(verdict.nameMatches).toBe(true);
-		expect(verdict.isSamePerson).toBe(true);
+		expect(verdict.isSamePerson).toBe(false);
 	});
 
 	it("refuses a hyphenated domain that is not the employer", () => {

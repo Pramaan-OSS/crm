@@ -15,7 +15,7 @@ const line = (what: string) =>
 
 export default defineTool({
 	description:
-		"Write the short profile of the company we work for. Every other session opens with it, so it is deliberately small: a few sentences and three one-line facts. Replaces the previous one.",
+		"Replace our company profile with a short narrative and three facts for future sessions.",
 	inputSchema: z.object({
 		narrative: z
 			.string()

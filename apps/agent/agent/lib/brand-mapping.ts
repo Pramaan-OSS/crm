@@ -1,4 +1,5 @@
 import type { Prisma } from "@crm/db";
+import { isLegacyLogo } from "@crm/db/company-logo";
 import type { Brand } from "./context";
 
 export type BrandUpdate = Prisma.CompanyUpdateInput;
@@ -34,9 +35,12 @@ function clean(value: string | null | undefined): string | null {
 }
 
 function fillable(key: string, current: CompanySnapshot): boolean {
-	if (key === "iconUrl") return true;
 	if (key === "name") return current.nameIsPlaceholder;
-	return current[key as keyof CompanySnapshot] === null;
+	return (
+		current[key as keyof CompanySnapshot] === null ||
+		(["logoUrl", "iconUrl"].includes(key) &&
+			isLegacyLogo(current[key as "logoUrl" | "iconUrl"]))
+	);
 }
 
 export function brandToUpdate(

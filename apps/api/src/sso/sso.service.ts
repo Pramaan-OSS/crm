@@ -1,8 +1,11 @@
 import {
+	appUrl,
 	auth,
 	canConfigureSso,
+	ensureManagedBackend,
 	isGoogleConfigured,
 	isMicrosoftConfigured,
+	managedBackend,
 	ssoCallbackBase,
 	ssoCallbackURL,
 	ssoProviderName,
@@ -10,6 +13,7 @@ import {
 	workspaceRoleOf,
 } from "@crm/auth";
 import type { Db, Prisma } from "@crm/db";
+import { pramaanKeySet } from "@crm/pramaan";
 import {
 	BadRequestException,
 	ForbiddenException,
@@ -123,9 +127,17 @@ export class SsoService {
 			orderBy: { providerId: "asc" },
 		});
 
+		// The boot provisions the managed backend; if that never happened or
+		// failed (a broken key at boot, fixed since), retry lazily here — the
+		// call is idempotent and free, with a minute between refused attempts.
+		const backend = managedBackend() ?? (await ensureManagedBackend());
+
 		return {
 			google: isGoogleConfigured(),
 			microsoft: isMicrosoftConfigured(),
+			pramaanKeySet: pramaanKeySet(),
+			appUrl,
+			managedAuthUrl: backend?.authUrl ?? null,
 			providers: rows.map((row) => ({
 				providerId: row.providerId,
 				name: ssoProviderName(row.providerId),

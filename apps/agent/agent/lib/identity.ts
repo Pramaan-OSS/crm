@@ -36,7 +36,7 @@ export function verdictFor(
 			),
 	);
 	const nameMatches = nameMatchesLocalPart(person, local);
-	const isSamePerson = emailMatches || (employerMatches && nameMatches);
+	const isSamePerson = emailMatches;
 
 	return {
 		emailMatches,

@@ -1,5 +1,16 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
+import { ensureDatabaseUrl } from "@crm/db/managed";
+
+// When the person set no DATABASE_URL, use the managed database's saved
+// address (the API boot provisions and saves it; this is a no-op when it is
+// already in the environment) and otherwise fall back to the local default.
+const dbOutcome = await ensureDatabaseUrl();
+if (dbOutcome.managed) {
+	console.log(
+		`[agent] using the managed database ${dbOutcome.from === "saved" ? "saved from an earlier boot" : "provisioned this boot"}.`,
+	);
+}
 
 const rawPort = process.env.AGENT_PORT ?? process.env.PORT ?? "2000";
 const port = Number(rawPort);

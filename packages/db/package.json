@@ -8,7 +8,9 @@
 		"./agent-tasks": "./src/agent-tasks.ts",
 		"./attribution": "./src/attribution.ts",
 		"./blob": "./src/blob.ts",
+		"./company-logo": "./src/company-logo.ts",
 		"./client": "./src/client.ts",
+		"./managed": "./src/managed.ts",
 		"./currency": "./src/currency.ts",
 		"./crm-events": "./src/crm-events.ts",
 		"./deal-stage": "./src/deal-stage.ts",
@@ -22,7 +24,6 @@
 		"./json": "./src/json.ts",
 		"./safe-fetch": "./src/safe-fetch.ts",
 		"./settings": "./src/settings.ts",
-		"./slack-inventory": "./src/slack-inventory.ts",
 		"./tracking": "./src/tracking.ts",
 		"./workspace": "./src/workspace.ts"
 	},

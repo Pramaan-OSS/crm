@@ -16,6 +16,13 @@ const PRESENTATION: EnrichmentPresentation = {
 
 const QUEUED = { label: "Queued", tone: "neutral" as StatusTone, busy: false };
 
+/** Shown instead of Queued/Researching when research cannot run at all. */
+export const RESEARCH_BLOCKED_BADGE = {
+	label: "Can't research",
+	tone: "neutral" as StatusTone,
+	busy: false,
+};
+
 export const ENRICHMENT_POLL_MS = 3_000;
 
 export const ENRICHMENT_IDLE_POLL_MS = 30_000;
@@ -27,7 +34,9 @@ export const ENRICHMENT_FACET_OPTIONS = (
 export function enrichmentPresentation(
 	status: EnrichmentStatus,
 	queued: boolean,
+	blocked = false,
 ) {
+	if (blocked && isEnriching(status, queued)) return RESEARCH_BLOCKED_BADGE;
 	return status === "PENDING" && queued ? QUEUED : PRESENTATION[status];
 }
 

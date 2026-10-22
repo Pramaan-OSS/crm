@@ -78,7 +78,9 @@ function CreateContactForm({ companyId }: { companyId?: string }) {
 	const create = useMutation(
 		trpc.contacts.create.mutationOptions({
 			onSuccess: async (contact) => {
-				await cache.contact(contact.id);
+				// Close first, whatever happens next: a hung cache refresh must not
+				// leave the dialog open over the record it just created.
+				void cache.contact(contact.id).catch(() => {});
 				toast.success(
 					`${[contact.firstName, contact.lastName].filter(Boolean).join(" ")} added.`,
 				);

@@ -1,21 +1,14 @@
 // One error type end to end: every Pramaan failure surfaces as a PramaanError with a stable code.
-// Vendored from @pramaan/sdk and made standalone (no workspace imports).
+// Preserve retry timing and accepted job identity, absent from the package error extras.
 
-export type ErrorCode =
-	| "invalid_request"
-	| "not_found"
-	| "upstream_unavailable"
-	| "upstream_timeout"
-	| "internal"
-	| "unauthorized"
-	| "spend_cap_reached"
-	| "rate_limited"
-	| "conflict"
-	| "connection_required"
-	| "job_not_found";
+import type { ErrorCode } from "@pramaan/sdk";
+import { PramaanError as SdkPramaanError } from "@pramaan/sdk";
+
+export type { ErrorCode } from "@pramaan/sdk";
 
 const CODES: ReadonlySet<string> = new Set<ErrorCode>([
 	"invalid_request",
+	"forbidden",
 	"not_found",
 	"upstream_unavailable",
 	"upstream_timeout",
@@ -29,34 +22,47 @@ const CODES: ReadonlySet<string> = new Set<ErrorCode>([
 ]);
 
 export interface PramaanErrorExtras {
+	readonly reason?: string;
+	readonly plan?: unknown;
+	readonly needs?: unknown;
 	readonly retryable?: boolean;
+	/** Server Retry-After, converted to milliseconds. */
+	readonly retryAfterMs?: number;
+	readonly jobId?: string;
 	readonly requestId?: string | undefined;
 	readonly status?: number | undefined;
 	/** For `connection_required`: the capability family to connect (`email`, `apps`, ...). */
 	readonly slot?: string | undefined;
 }
 
-export class PramaanError extends Error {
-	readonly code: ErrorCode;
-	readonly retryable: boolean;
+export class PramaanError extends SdkPramaanError {
+	static override [Symbol.hasInstance](value: unknown): boolean {
+		// biome-ignore lint/complexity/noThisInStatic: Preserve native checks for subclasses.
+		if (this === PramaanError) return value instanceof SdkPramaanError;
+		// biome-ignore lint/complexity/noThisInStatic: The subclass constructor is required here.
+		return Function.prototype[Symbol.hasInstance].call(this, value);
+	}
+
+	override readonly reason: string | undefined;
+	readonly plan: unknown;
+	readonly needs: unknown;
+	readonly jobId: string | undefined;
+	readonly retryAfterMs: number | undefined;
 	/** The API's `req_...` id. Undefined for local errors. */
-	readonly requestId: string | undefined;
 	/** HTTP status, when the error came from the API. */
-	readonly status: number | undefined;
-	readonly slot: string | undefined;
 
 	constructor(
 		code: ErrorCode,
 		message: string,
 		extras: PramaanErrorExtras = {},
 	) {
-		super(message);
+		super(code, message, extras);
 		this.name = "PramaanError";
-		this.code = code;
-		this.retryable = extras.retryable ?? false;
-		this.requestId = extras.requestId;
-		this.status = extras.status;
-		this.slot = extras.slot;
+		this.reason = extras.reason;
+		this.plan = extras.plan;
+		this.needs = extras.needs;
+		this.jobId = extras.jobId;
+		this.retryAfterMs = extras.retryAfterMs;
 	}
 }
 
@@ -73,9 +79,11 @@ function codeForStatus(status: number): ErrorCode {
 }
 
 /** Builds a PramaanError from a non-2xx response: the API's envelope, or a status-based fallback. */
-export async function errorFromResponse(
-	response: Response,
-): Promise<PramaanError> {
+export async function errorFromResponse(response: {
+	readonly headers: { get(name: string): string | null };
+	readonly status: number;
+	json(): Promise<unknown>;
+}): Promise<PramaanError> {
 	const headerId = response.headers.get("x-request-id") ?? undefined;
 	let envelope: Record<string, unknown> | undefined;
 	try {
@@ -94,7 +102,21 @@ export async function errorFromResponse(
 		typeof envelope?.message === "string"
 			? envelope.message
 			: `The API answered with HTTP ${response.status}.`;
+
+	const wait = response.headers.get("retry-after");
+	let retryAfterMs: number | undefined;
+	if (wait !== null && wait.trim() !== "") {
+		const seconds = Number(wait);
+		const parsed = Number.isFinite(seconds)
+			? seconds * 1000
+			: Date.parse(wait) - Date.now();
+		if (Number.isFinite(parsed) && parsed >= 0) retryAfterMs = parsed;
+	}
 	return new PramaanError(code, message, {
+		retryAfterMs,
+		reason: typeof envelope?.reason === "string" ? envelope.reason : undefined,
+		plan: envelope?.plan,
+		needs: envelope?.needs,
 		retryable:
 			typeof envelope?.retryable === "boolean"
 				? envelope.retryable

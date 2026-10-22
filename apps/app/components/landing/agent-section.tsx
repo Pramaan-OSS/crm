@@ -5,7 +5,6 @@ import Attachment from "@carbon/icons-react/es/Attachment";
 import ChevronDown from "@carbon/icons-react/es/ChevronDown";
 import Renew from "@carbon/icons-react/es/Renew";
 import Time from "@carbon/icons-react/es/Time";
-import SlackLogo from "@crm/ui/components/brand-logos/slack";
 import { cn } from "@crm/ui/lib/utils";
 import Image from "next/image";
 import type * as React from "react";
@@ -39,11 +38,8 @@ function Composer() {
 		<div className="flex min-h-24 w-3xl max-w-full shrink-0 select-none flex-col justify-between rounded-lg border border-[#3D3D3D] bg-muted p-[11px]">
 			<p className="flex flex-wrap items-center gap-1 p-1 text-[13px]/6">
 				<span className="text-[#00805E]">/Create agent</span>
-				<span className="text-white">Send a new message to</span>
-				<Chip className="gap-1 text-white">
-					<SlackLogo className="size-[15px] shrink-0" />
-					Slack
-				</Chip>
+				<span className="text-white">Email the owner at</span>
+				<Chip className="gap-1 text-white">owner@acme.com</Chip>
 				<span className="text-white">and ping</span>
 				<Chip className="gap-1 text-white">
 					<DanAvatar />
@@ -78,14 +74,9 @@ function SuggestedActions() {
 			</div>
 
 			<SuggestedAction>
-				<span className="shrink-0">Create a</span>
-				<Chip>
-					<SlackLogo className="size-[14px] shrink-0" />
-					Slack
-				</Chip>
-				<span className="shrink-0">
-					channel and invite the owner when a deal hits
-				</span>
+				<span className="shrink-0">Email the</span>
+				<Chip>deal owner</Chip>
+				<span className="shrink-0">when a deal hits</span>
 				<Chip className="gap-1.5 px-2">
 					<span className="size-1.5 shrink-0 rounded-full bg-success" />
 					Closed won

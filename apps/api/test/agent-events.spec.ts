@@ -51,12 +51,6 @@ afterAll(async () => {
 			],
 		},
 	});
-	await db.agentTask.deleteMany({
-		where: {
-			kind: "slack-channel-join",
-			payload: { path: ["channelId"], equals: channelId },
-		},
-	});
 	if (persistedDealId) {
 		await db.activity.deleteMany({ where: { dealId: persistedDealId } });
 		await db.deal.deleteMany({ where: { id: persistedDealId } });

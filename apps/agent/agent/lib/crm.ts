@@ -75,6 +75,7 @@ export async function personForVerification(
 	if (!contact) return null;
 
 	return {
+		email: contact.email,
 		firstName: contact.firstName,
 		lastName: contact.lastName,
 		fullName: [contact.firstName, contact.lastName].filter(Boolean).join(" "),

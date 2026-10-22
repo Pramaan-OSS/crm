@@ -268,6 +268,7 @@ model Company {
   enrichedAt       DateTime?
   enrichmentError  String?
   enrichment       CompanyEnrichment?
+  logo             CompanyLogo?
 
   source RecordSource @default(MANUAL)
 
@@ -292,10 +293,24 @@ model Company {
   @@map("company")
 }
 
+model CompanyLogo {
+  companyId    String   @id
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceFileId String
+  contentType  String
+  bytes        Bytes
+  size         Int
+  sha256       String
+  createdAt    DateTime @default(now())
+
+  @@index([sourceFileId])
+  @@map("companyLogo")
+}
+
 model CompanyEnrichment {
   companyId String   @id
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  source    String   @default("context.dev")
+  source    String   @default("company-enrichment")
   raw       Json
   fetchedAt DateTime @default(now())
 
@@ -1390,35 +1405,6 @@ model FormSubmission {
   @@index([contactId])
   @@index([createdAt])
   @@map("formSubmission")
-}
-
-model Install {
-  id String @id
-
-  uuid    String @unique
-  version String
-
-  lastRollupAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("install")
-}
-
-model TelemetryMilestone {
-  step      String   @id
-  reachedAt DateTime @default(now())
-
-  @@map("telemetryMilestone")
-}
-
-model TelemetryCounter {
-  name      String   @id
-  count     Int      @default(0)
-  updatedAt DateTime @updatedAt
-
-  @@map("telemetryCounter")
 }
 
 model Organization {

@@ -88,7 +88,7 @@ describe("a brand task with no key", () => {
 		await settle(
 			subjectOf(id),
 			EnrichmentStatus.SKIPPED,
-			"Context.dev is not configured, so there is nowhere to look.",
+			"Company enrichment is not connected, so there is nowhere to look.",
 		);
 
 		expect(await statusOf(id)).toBe(EnrichmentStatus.PENDING);

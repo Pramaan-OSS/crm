@@ -4,7 +4,6 @@ import Plug from "@carbon/icons-react/es/Plug";
 import DocusignLogo from "@crm/ui/components/brand-logos/docusign";
 import GoogleLogo from "@crm/ui/components/brand-logos/google";
 import MicrosoftLogo from "@crm/ui/components/brand-logos/microsoft";
-import SlackLogo from "@crm/ui/components/brand-logos/slack";
 import StripeLogo from "@crm/ui/components/brand-logos/stripe";
 import {
 	Dialog,
@@ -15,6 +14,7 @@ import {
 } from "@crm/ui/components/dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ConnectionNotice } from "@/components/connections/connection-notice";
 
 export function AddConnectionDialog({
 	slug,
@@ -42,20 +42,15 @@ export function AddConnectionDialog({
 				</DialogHeader>
 				<div className="flex flex-col border-y px-2 py-2">
 					{!connected.includes("Google Workspace") ? (
-						<CatalogRow
-							logo={GoogleLogo}
-							name="Google Workspace"
-							description="Bring in Gmail messages and Google Calendar meetings"
-							href={`/${slug}/settings/connections/google`}
-						/>
-					) : null}
-					{!connected.includes("Slack") ? (
-						<CatalogRow
-							logo={SlackLogo}
-							name="Slack"
-							description="Let deployed agents notify approved channels and people"
-							href={`/${slug}/settings/connections/slack`}
-						/>
+						<div>
+							<CatalogRow
+								logo={GoogleLogo}
+								name="Google Workspace"
+								description="Bring in Gmail messages and Google Calendar meetings"
+								href={`/${slug}/settings/connections/google`}
+							/>
+							<ConnectionNotice slug="google" appName="Google Workspace" />
+						</div>
 					) : null}
 					{!connected.includes("Microsoft 365") ? (
 						<CatalogRow

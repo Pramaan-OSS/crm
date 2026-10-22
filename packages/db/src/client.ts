@@ -2,20 +2,24 @@ import "@crm/env/load";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { type Prisma, PrismaClient } from "./generated/prisma/client";
+import { readManagedDatabaseUrl } from "./managed";
+
+// Same localhost default the API's env validation and the Prisma config use:
+// the compose Postgres `./start` launches, published on host port 54329. Set
+// DATABASE_URL only to use a Postgres you run yourself; with a key and no
+// DATABASE_URL, the managed database's saved address wins instead.
+const DEFAULT_DATABASE_URL =
+	"postgresql://postgres:postgres@localhost:54329/crm?schema=public";
 
 const connectionString =
 	process.env.NODE_ENV === "test" ? testDatabase() : liveDatabase();
 
 function liveDatabase(): string {
-	const url = process.env.DATABASE_URL;
-
-	if (!url) {
-		throw new Error(
-			"DATABASE_URL is not set. Copy .env.example to .env at the root of the repo and fill it in, or set DATABASE_URL in the environment.",
-		);
-	}
-
-	return url;
+	return (
+		process.env.DATABASE_URL?.trim() ||
+		readManagedDatabaseUrl() ||
+		DEFAULT_DATABASE_URL
+	);
 }
 
 function testDatabase(): string {

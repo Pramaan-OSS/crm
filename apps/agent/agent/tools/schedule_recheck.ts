@@ -9,7 +9,7 @@ const MAX_DAYS = 730;
 
 export default defineTool({
 	description:
-		"Decide when this contact is worth looking at again, and say why. Use a short interval for people whose job change would move a live deal, a long one for quiet records, and skip it entirely for addresses nobody will ever sell to.",
+		"Schedule a justified contact recheck: sooner for deal-relevant job changes, later for quiet records. Skip irrelevant addresses.",
 	inputSchema: z.object({
 		contactId: z.string(),
 		days: z

@@ -3,12 +3,12 @@
 
 import "@crm/env/load";
 
-import { type Pramaan, pramaanFromEnv } from "@crm/pramaan";
+import { type Pramaan, pramaanFromEnv, pramaanKeySet } from "@crm/pramaan";
 
 let client: Pramaan | null | undefined;
 
 export function pramaanEnabled(): boolean {
-	return Boolean(process.env.PRAMAAN_API_KEY?.trim());
+	return pramaanKeySet();
 }
 
 /** Tests toggle the key and call this, so the next read re-resolves from the environment. */
@@ -20,10 +20,7 @@ export function resetPramaanForTests(): void {
 export function pramaan(): Pramaan | null {
 	if (client !== undefined) return client;
 
-	client = pramaanFromEnv({
-		PRAMAAN_API_KEY: process.env.PRAMAAN_API_KEY,
-		PRAMAAN_BASE_URL: process.env.PRAMAAN_BASE_URL,
-	});
+	client = pramaanFromEnv();
 
 	return client;
 }

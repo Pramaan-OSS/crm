@@ -87,17 +87,32 @@ export class CalendarSyncService {
 			suppressedEmails,
 		};
 
-		let pageToken: string | undefined;
-		let syncToken = row.cursor ?? undefined;
+		// A bounded sweep must resume at the next page, with the same window.
+		let saved: { pageToken: string; timeMin: string; timeMax: string } | null =
+			null;
+		try {
+			const value = JSON.parse(row.cursor ?? "null");
+			if (
+				value &&
+				typeof value.pageToken === "string" &&
+				typeof value.timeMin === "string" &&
+				typeof value.timeMax === "string"
+			)
+				saved = value;
+		} catch {
+			/* Older cursors start a fresh window. */
+		}
+		let pageToken = saved?.pageToken;
+		const timeMin = saved?.timeMin ?? new Date().toISOString();
+		const timeMax = saved?.timeMax ?? this.horizon().toISOString();
 		let written = 0;
 		let removed = 0;
 
 		for (let page = 0; page < MAX_PAGES_PER_TICK; page += 1) {
 			const result = await this.calendar.listEvents(token.accessToken, {
-				syncToken,
 				pageToken,
-				timeMin: new Date().toISOString(),
-				timeMax: this.horizon().toISOString(),
+				timeMin,
+				timeMax,
 			});
 
 			if (result.outcome === "cursor-invalid") {
@@ -151,9 +166,8 @@ export class CalendarSyncService {
 			pageToken = result.data.nextPageToken;
 
 			if (!pageToken) {
-				syncToken = result.data.nextSyncToken ?? syncToken;
 				await this.state.settle(row.id, {
-					cursor: syncToken ?? null,
+					cursor: null,
 					status: GoogleSyncStatus.RUNNING,
 				});
 
@@ -175,6 +189,7 @@ export class CalendarSyncService {
 		}
 
 		await this.state.settle(row.id, {
+			cursor: JSON.stringify({ pageToken, timeMin, timeMax }),
 			status: GoogleSyncStatus.IDLE,
 		});
 

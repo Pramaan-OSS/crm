@@ -9,7 +9,10 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: crm
     ports:
-      - "5432:5432"
+      # Unusual host port on purpose: 5432 belongs to any Postgres the person
+      # already runs, and shadowing it would send migrations to the wrong
+      # database. The app reaches this one at localhost:54329.
+      - "54329:5432"
     volumes:
       - crm-postgres:/var/lib/postgresql/data
     healthcheck:

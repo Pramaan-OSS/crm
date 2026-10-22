@@ -1,6 +1,7 @@
 import { FactBand } from "@crm/db";
 
 export type EvidenceKind =
+	| "public-profile.link"
 	| "profile.email-match"
 	| "linkedin.employer-and-name"
 	| "crm.thread-reply"
@@ -20,6 +21,11 @@ type Weighting = {
 };
 
 export const WEIGHTS = {
+	"public-profile.link": {
+		weight: 0.9,
+		primary: true,
+		label: "a returned link ties this public handle to the established person",
+	},
 	"profile.email-match": {
 		weight: 0.95,
 		primary: true,

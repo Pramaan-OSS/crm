@@ -7,7 +7,7 @@ import { assertResearchPurpose } from "../lib/session-purpose";
 
 export default defineTool({
 	description:
-		"Find and store a photograph for a contact, from their LinkedIn profile, their GitHub account, or their employer's own team page — whichever is on the record. Never searches for a face by name. Reports which source it used, or what it tried.",
+		"Find and store a contact photo from their recorded profiles or employer page. Never search faces by name; report the source.",
 	inputSchema: z.object({
 		contactId: z.string(),
 		force: z
@@ -22,7 +22,7 @@ export default defineTool({
 				stored: false as const,
 				configured: false as const,
 				reason:
-					"This install has no BLOB_READ_WRITE_TOKEN, so there is nowhere to keep a copy, and " +
+					"This install has no PRAMAAN_API_KEY, so there is nowhere to keep a copy, and " +
 					"the source URLs expire. Retrying will not help.",
 			};
 		}

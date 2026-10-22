@@ -72,7 +72,10 @@ function eventFrom(raw: JsonObject): GoogleEvent | null {
 				return [
 					{
 						email,
-						displayName: firstText(entry, ["name"]),
+						displayName: firstText(entry, ["displayName", "name"]),
+						self: record(entry)?.self === true,
+						resource: record(entry)?.resource === true,
+						organizer: record(entry)?.organizer === true,
 						responseStatus: firstText(entry, ["responseStatus", "rsvp"]),
 					},
 				];
@@ -82,6 +85,9 @@ function eventFrom(raw: JsonObject): GoogleEvent | null {
 	return {
 		id,
 		iCalUID: text(raw.iCalUID),
+		status: text(raw.status),
+		recurringEventId: text(raw.recurringEventId),
+		originalStartTime: timeFrom(raw.originalStartTime),
 		summary: firstText(raw, ["summary", "title"]),
 		description: text(raw.description),
 		location: text(raw.location),
@@ -130,13 +136,17 @@ export class CalendarClient {
 	): Promise<MailboxResult<EventsPage>> {
 		const result = await this.apps.executeAction(
 			accessToken,
-			"google_calendar",
-			"fetch",
+			"googlecalendar",
+			"events_list",
 			{
 				calendarId: "primary",
 				timeMin: query.timeMin,
 				timeMax: query.timeMax,
-				maxResults: query.maxResults ?? 250,
+				maxResults: query.maxResults ?? 25,
+				singleEvents: true,
+				pageToken: query.pageToken,
+				fields:
+					"items(id,iCalUID,status,summary,description,location,start,end,originalStartTime,recurringEventId,organizer,attendees,hangoutLink),nextPageToken",
 			},
 		);
 
@@ -160,6 +170,7 @@ export class CalendarClient {
 			outcome: "ok",
 			data: {
 				items,
+				nextPageToken: firstText(result.output, ["nextPageToken"]),
 				// Actions have no sync token; the next pass re-reads the window.
 				nextSyncToken: query.syncToken,
 			},

@@ -1,6 +1,7 @@
 import { plainToInstance, Type } from "class-transformer";
 import {
 	IsEnum,
+	IsIn,
 	IsInt,
 	IsOptional,
 	IsString,
@@ -27,26 +28,31 @@ export class EnvironmentVariables {
 	@Max(65535)
 	PORT = 3001;
 
+	// Local default matches the database `./start` launches (docker compose,
+	// published on host port 54329 so it never collides with a Postgres the
+	// person already runs on 5432). Set DATABASE_URL only to use your own.
 	@IsString()
-	@MinLength(1, {
-		message:
-			"DATABASE_URL is required. `docker compose up -d` starts one, or set it to any Postgres connection string.",
-	})
-	DATABASE_URL!: string;
+	@MinLength(1)
+	DATABASE_URL: string =
+		"postgresql://postgres:postgres@localhost:54329/crm?schema=public";
 
+	// Generated into .env by ./start on first run. When it is set it must be a
+	// real secret; the start script guarantees one before the API boots.
+	@IsOptional()
 	@IsString()
 	@MinLength(32, {
 		message:
-			"BETTER_AUTH_SECRET must be at least 32 characters. Generate one with: openssl rand -base64 32",
+			"BETTER_AUTH_SECRET must be at least 32 characters. Run ./start to generate one, or: openssl rand -base64 32",
 	})
-	BETTER_AUTH_SECRET!: string;
+	BETTER_AUTH_SECRET?: string;
 
+	// Only consulted once a sign-in method (GOOGLE_CLIENT_ID, MICROSOFT_CLIENT_ID
+	// or SSO) is configured: with no method configured nobody can sign in at all,
+	// so a fresh clone must boot without it. When a method is on, the sign-in
+	// page and the user-creation hook say what to set.
+	@IsOptional()
 	@IsString()
-	@MinLength(1, {
-		message:
-			'ALLOWED_SIGN_IN is required — it is the only thing deciding who can sign in. Set it to your email domain, e.g. ALLOWED_SIGN_IN="acme.com", or to a single address for a one-person install.',
-	})
-	ALLOWED_SIGN_IN!: string;
+	ALLOWED_SIGN_IN?: string;
 
 	@IsOptional()
 	@IsString()
@@ -54,15 +60,7 @@ export class EnvironmentVariables {
 
 	@IsOptional()
 	@IsString()
-	GOOGLE_CLIENT_SECRET?: string;
-
-	@IsOptional()
-	@IsString()
 	MICROSOFT_CLIENT_ID?: string;
-
-	@IsOptional()
-	@IsString()
-	MICROSOFT_CLIENT_SECRET?: string;
 
 	@IsOptional()
 	@IsString()
@@ -97,13 +95,17 @@ export class EnvironmentVariables {
 	})
 	CRON_SECRET?: string;
 
+	/** Built-in sync scheduler: "on" by default; "off" leaves sync to an outside cron. */
+	@IsOptional()
+	@IsIn(["on", "off"])
+	SYNC_SCHEDULER?: string;
+
+	// Optional so the CRM itself works without the platform: capability features
+	// check pramaanKeySet()/the status route and say what is missing instead of
+	// blocking the whole install at boot.
 	@IsOptional()
 	@IsString()
-	@MinLength(1, {
-		message:
-			'PRAMAAN_API_KEY is required — every outside call runs through it. Set it to your Pramaan key (it starts "sk_live_").',
-	})
-	PRAMAAN_API_KEY!: string;
+	PRAMAAN_API_KEY?: string;
 
 	@IsOptional()
 	@IsString()
@@ -112,14 +114,6 @@ export class EnvironmentVariables {
 	@IsOptional()
 	@IsString()
 	PRAMAAN_STORAGE_BUCKET?: string;
-
-	@IsOptional()
-	@IsString()
-	POSTHOG_KEY?: string;
-
-	@IsOptional()
-	@IsString()
-	POSTHOG_HOST?: string;
 
 	@IsOptional()
 	@IsUrl(
@@ -134,10 +128,6 @@ export class EnvironmentVariables {
 	@IsOptional()
 	@IsString()
 	AGENT_BRIDGE_SECRET?: string;
-
-	@IsOptional()
-	@IsString()
-	CRM_TELEMETRY_DISABLED?: string;
 }
 
 export type RawEnvironment = Record<string, string | undefined>;

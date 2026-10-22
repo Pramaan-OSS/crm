@@ -1,13 +1,19 @@
+export { LOGO_MAX_BYTES, workspaceFileId, workspaceLogo } from "./logo-file";
+
 // @crm/pramaan — the one module through which every outside call in this product flows.
 // Built from PRAMAAN_API_KEY and optional PRAMAAN_BASE_URL. Nothing else in the repository
 // talks to an outside service.
+
+import { normalizeGenerationSchemas } from "./json-schema";
+
+export { assertBoundedJsonSchema, normalizeJsonSchema } from "./json-schema";
 
 import { randomUUID } from "node:crypto";
 import type { Caps } from "./capabilities";
 import { CATALOG } from "./catalog";
 import { DEFAULT_BASE_URL, PramaanClient } from "./sdk/client";
 import { PramaanError } from "./sdk/errors";
-import type { RunOptions } from "./sdk/types";
+import type { LlmChatStreamEvent, RunOptions } from "./sdk/types";
 
 export type { Caps } from "./capabilities";
 export {
@@ -34,6 +40,14 @@ export type {
 	Estimate,
 	Job,
 	JobStatus,
+	LlmChatStreamEvent,
+	OutcomeDescription,
+	OutcomeEstimate,
+	OutcomeRun,
+	OutcomeRunOptions,
+	OutcomeRunStep,
+	OutcomeStep,
+	OutcomeSummary,
 	RunOptions,
 	WaitOptions,
 } from "./sdk/types";
@@ -53,14 +67,26 @@ export const Cap = {
 	peopleEmailVerify: "people.email.verify",
 	exchangeRateGet: "finance.exchange-rate.get",
 	llmComplete: "llm.complete",
-	llmModelsList: "llm.models.list",
+	llmChat: "llm.chat",
+	appsCatalogSearch: "apps.catalog.search",
+	documentParse: "document.parse",
 	storageObjectUploadUrl: "storage.object.upload-url",
 	storageObjectDownloadUrl: "storage.object.download-url",
 	appsConnectionStart: "apps.connection.start",
 	appsConnectionsList: "apps.connections.list",
 	appsConnectionRevoke: "apps.connection.revoke",
 	appsActionExecute: "apps.action.execute",
+	authSocialExchange: "auth.social.exchange",
 	emailSend: "email.send",
+	authBackendProvision: "auth.backend.provision",
+	authBackendGet: "auth.backend.get",
+	authBackendDomainsSet: "auth.backend.domains.set",
+	authTokenVerify: "auth.token.verify",
+	authUserGet: "auth.user.get",
+	authUserDelete: "auth.user.delete",
+	authUsersList: "auth.users.list",
+	dbPostgresProvision: "db.postgres.provision",
+	dbPostgresGet: "db.postgres.get",
 } as const;
 
 export type CapId = (typeof Cap)[keyof typeof Cap];
@@ -115,9 +141,17 @@ interface CapShapes {
 		readonly req: Caps.LlmCompleteRequest;
 		readonly res: Caps.LlmCompleteResult;
 	};
-	[Cap.llmModelsList]: {
-		readonly req: Caps.LlmModelsListRequest;
-		readonly res: Caps.LlmModelsListResult;
+	[Cap.llmChat]: {
+		readonly req: Caps.LlmChatRequest;
+		readonly res: Caps.LlmChatResult;
+	};
+	[Cap.appsCatalogSearch]: {
+		readonly req: Caps.AppsCatalogSearchRequest;
+		readonly res: Caps.AppsCatalogSearchResult;
+	};
+	[Cap.documentParse]: {
+		readonly req: Caps.DocumentParseRequest;
+		readonly res: Caps.DocumentParseResult;
 	};
 	[Cap.storageObjectUploadUrl]: {
 		readonly req: Caps.StorageUploadUrlRequest;
@@ -143,9 +177,49 @@ interface CapShapes {
 		readonly req: Caps.AppsActionExecuteRequest;
 		readonly res: Caps.AppsActionExecuteResult;
 	};
+	[Cap.authSocialExchange]: {
+		readonly req: Caps.AuthSocialExchangeRequest;
+		readonly res: Caps.AuthSocialExchangeResult;
+	};
 	[Cap.emailSend]: {
 		readonly req: Caps.EmailSendRequest;
 		readonly res: Caps.EmailSendResult;
+	};
+	[Cap.authBackendProvision]: {
+		readonly req: Record<string, never>;
+		readonly res: Caps.AuthBackendProvisionResult;
+	};
+	[Cap.authBackendGet]: {
+		readonly req: Record<string, never>;
+		readonly res: Caps.AuthBackendGetResult;
+	};
+	[Cap.authBackendDomainsSet]: {
+		readonly req: Caps.AuthBackendDomainsSetRequest;
+		readonly res: Caps.AuthBackendDomainsSetResult;
+	};
+	[Cap.authTokenVerify]: {
+		readonly req: Caps.AuthTokenVerifyRequest;
+		readonly res: Caps.AuthTokenVerifyResult;
+	};
+	[Cap.authUserGet]: {
+		readonly req: Caps.AuthUserGetRequest;
+		readonly res: Caps.AuthUserGetResult;
+	};
+	[Cap.authUserDelete]: {
+		readonly req: Caps.AuthUserDeleteRequest;
+		readonly res: Caps.AuthUserDeleteResult;
+	};
+	[Cap.authUsersList]: {
+		readonly req: Caps.AuthUsersListRequest;
+		readonly res: Caps.AuthUsersListResult;
+	};
+	[Cap.dbPostgresProvision]: {
+		readonly req: Record<string, never>;
+		readonly res: Caps.DbPostgresProvisionResult;
+	};
+	[Cap.dbPostgresGet]: {
+		readonly req: Record<string, never>;
+		readonly res: Caps.DbPostgresGetResult;
 	};
 }
 
@@ -159,6 +233,10 @@ export type CapsCallResult<Id extends CapId> = CapShapes[Id]["res"];
 export class Pramaan {
 	constructor(private readonly client: PramaanClient) {}
 
+	fileDownload(fileId: string): Promise<Response> {
+		return this.client.fileDownload(fileId);
+	}
+
 	/** The untyped client, for capabilities not in CapShapes yet. */
 	get raw(): PramaanClient {
 		return this.client;
@@ -169,7 +247,13 @@ export class Pramaan {
 		input: CapsCallInput<Id>,
 		opts?: RunOptions,
 	): Promise<CapsCallResult<Id>> {
-		return this.client.call(id, input, opts) as Promise<CapsCallResult<Id>>;
+		return this.client.call(
+			id,
+			id === Cap.llmChat || id === Cap.llmComplete
+				? normalizeGenerationSchemas(input)
+				: input,
+			opts,
+		) as Promise<CapsCallResult<Id>>;
 	}
 
 	run<Id extends CapId>(
@@ -177,7 +261,13 @@ export class Pramaan {
 		input: CapsCallInput<Id>,
 		opts?: RunOptions,
 	): Promise<unknown> {
-		return this.client.run(id, input, opts);
+		return this.client.run(
+			id,
+			id === Cap.llmChat || id === Cap.llmComplete
+				? normalizeGenerationSchemas(input)
+				: input,
+			opts,
+		);
 	}
 
 	info(id: string) {
@@ -190,6 +280,31 @@ export class Pramaan {
 
 	get capabilities() {
 		return this.client.capabilities;
+	}
+
+	/**
+	 * Outcomes: fixed recipes of capability steps under one business name. Check
+	 * `available` on the description at run time (it changes), estimate before a run
+	 * that costs, and pass the estimate's `plan` when the outcome needs approval. A
+	 * run of an unavailable outcome throws `upstream_unavailable` — the signal to use
+	 * the capability path.
+	 */
+	get outcomes() {
+		return this.client.outcomes;
+	}
+
+	/**
+	 * Runs `llm.chat` and yields the reply as it is generated (PRA-10): text deltas,
+	 * tool-call pieces, usage, then `done` with the checked result. A stream that ends
+	 * early throws `upstream_unavailable` — what was generated is charged, so callers
+	 * must not silently re-run the call. Streaming refused (a plain JSON reply on the
+	 * same call) yields one `done` instead.
+	 */
+	llmChatStream(
+		input: Caps.LlmChatRequest,
+		opts?: RunOptions,
+	): AsyncGenerator<LlmChatStreamEvent> {
+		return this.client.llmChatStream(normalizeGenerationSchemas(input), opts);
 	}
 
 	// ── Typed helpers, one per capability the product uses ────────────────────
@@ -266,11 +381,23 @@ export class Pramaan {
 	): Promise<Caps.LlmCompleteResult> {
 		return this.call(Cap.llmComplete, input, opts);
 	}
-	llmModelsList(
-		input: Caps.LlmModelsListRequest,
+	llmChat(
+		input: Caps.LlmChatRequest,
 		opts?: RunOptions,
-	): Promise<Caps.LlmModelsListResult> {
-		return this.call(Cap.llmModelsList, input, opts);
+	): Promise<Caps.LlmChatResult> {
+		return this.call(Cap.llmChat, input, opts);
+	}
+	appsCatalogSearch(
+		input: Caps.AppsCatalogSearchRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AppsCatalogSearchResult> {
+		return this.call(Cap.appsCatalogSearch, input, opts);
+	}
+	documentParse(
+		input: Caps.DocumentParseRequest,
+		opts?: RunOptions,
+	): Promise<Caps.DocumentParseResult> {
+		return this.call(Cap.documentParse, input, opts);
 	}
 	storageUploadUrl(
 		input: Caps.StorageUploadUrlRequest,
@@ -308,11 +435,66 @@ export class Pramaan {
 	): Promise<Caps.AppsActionExecuteResult> {
 		return this.call(Cap.appsActionExecute, input, opts);
 	}
+	authSocialExchange(
+		input: Caps.AuthSocialExchangeRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AuthSocialExchangeResult> {
+		return this.call(Cap.authSocialExchange, input, opts);
+	}
 	emailSend(
 		input: Caps.EmailSendRequest,
 		opts?: RunOptions,
 	): Promise<Caps.EmailSendResult> {
 		return this.call(Cap.emailSend, input, opts);
+	}
+
+	/** Opens (or returns) the managed sign-in backend. Idempotent; safe to call every boot. */
+	authBackendProvision(
+		opts?: RunOptions,
+	): Promise<Caps.AuthBackendProvisionResult> {
+		return this.call(Cap.authBackendProvision, {} as never, opts);
+	}
+	authBackendGet(opts?: RunOptions): Promise<Caps.AuthBackendGetResult> {
+		return this.call(Cap.authBackendGet, {} as never, opts);
+	}
+	authBackendDomainsSet(
+		input: Caps.AuthBackendDomainsSetRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AuthBackendDomainsSetResult> {
+		return this.call(Cap.authBackendDomainsSet, input, opts);
+	}
+	authTokenVerify(
+		input: Caps.AuthTokenVerifyRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AuthTokenVerifyResult> {
+		return this.call(Cap.authTokenVerify, input, opts);
+	}
+	authUserGet(
+		input: Caps.AuthUserGetRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AuthUserGetResult> {
+		return this.call(Cap.authUserGet, input, opts);
+	}
+	authUserDelete(
+		input: Caps.AuthUserDeleteRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AuthUserDeleteResult> {
+		return this.call(Cap.authUserDelete, input, opts);
+	}
+	authUsersList(
+		input: Caps.AuthUsersListRequest,
+		opts?: RunOptions,
+	): Promise<Caps.AuthUsersListResult> {
+		return this.call(Cap.authUsersList, input, opts);
+	}
+	/** Opens (or returns) the managed Postgres database. Idempotent; safe to call every boot. */
+	dbPostgresProvision(
+		opts?: RunOptions,
+	): Promise<Caps.DbPostgresProvisionResult> {
+		return this.call(Cap.dbPostgresProvision, {} as never, opts);
+	}
+	dbPostgresGet(opts?: RunOptions): Promise<Caps.DbPostgresGetResult> {
+		return this.call(Cap.dbPostgresGet, {} as never, opts);
 	}
 }
 
@@ -341,15 +523,46 @@ export function createPramaan(options: {
 /**
  * The product's client, from the environment. Null when no key is set: callers decide whether
  * that means a skipped feature or an error. Never log the key.
+ *
+ * With `PRAMAAN_FAKE=1` the client is the offline fake instead (empty routes: any
+ * capability call fails loudly rather than reaching the network), so a fresh clone
+ * can be smoke-tested with a dummy key. Tests construct `FakePramaan` directly and
+ * never need this switch.
  */
-export function pramaanFromEnv(env: {
-	PRAMAAN_API_KEY?: string | undefined;
-	PRAMAAN_BASE_URL?: string | undefined;
-}): Pramaan | null {
-	const apiKey = env.PRAMAAN_API_KEY?.trim();
+/**
+ * The one place `PRAMAAN_API_KEY` is read from the environment. Every consumer —
+ * API, agent, auth, storage — gets its client (or its answer about whether one is
+ * configured) from here, so the key is read in exactly one module.
+ */
+export function pramaanFromEnv(): Pramaan | null {
+	const apiKey = process.env.PRAMAAN_API_KEY?.trim();
 	if (!apiKey) return null;
+	if (process.env.PRAMAAN_FAKE?.trim() === "1") {
+		// Offline fake: the app boots and renders; a capability call surfaces as a
+		// plain failed call rather than reaching the network.
+		return new Pramaan(
+			new PramaanClient({
+				apiKey: "fake",
+				fetch: () =>
+					Promise.reject(
+						new Error("PRAMAAN_FAKE=1: network disabled for this run."),
+					),
+			}),
+		);
+	}
 	return createPramaan({
 		apiKey,
-		baseUrl: env.PRAMAAN_BASE_URL?.trim() || undefined,
+		baseUrl: process.env.PRAMAAN_BASE_URL?.trim() || undefined,
 	});
 }
+
+/** True when a key is configured — the capability-style checks use this. */
+export function pramaanKeySet(): boolean {
+	return Boolean(process.env.PRAMAAN_API_KEY?.trim());
+}
+
+export {
+	type OutcomeApproval,
+	type OutcomeAttempt,
+	runOutcomeFlow,
+} from "./outcome-flow";

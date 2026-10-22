@@ -7,6 +7,7 @@ import type { Caps } from "@crm/pramaan";
 import { PramaanError } from "@crm/pramaan";
 import { describe, PramaanLookupError } from "./context";
 import { CONTEXT } from "./context-config";
+import { currentFresh } from "./focus";
 import { pramaan } from "./pramaan";
 
 export const MATCH_FLOOR = CONTEXT.people.matchFloor;
@@ -65,7 +66,10 @@ export async function personByProfileUrl(
 	}
 
 	try {
-		const response = await api.peopleEnrich({ linkedinUrl: profileUrl });
+		const response = await api.peopleEnrich({
+			...(currentFresh() ? { fresh: true } : {}),
+			linkedinUrl: profileUrl,
+		});
 		return personFrom(response, profileUrl);
 	} catch (error) {
 		return classify(error);
@@ -90,6 +94,7 @@ export async function personByClues(
 
 	try {
 		const response = await api.peopleEnrich({
+			...(currentFresh() ? { fresh: true } : {}),
 			email: clues.email,
 			firstName: clues.firstName || undefined,
 			lastName: clues.lastName || undefined,

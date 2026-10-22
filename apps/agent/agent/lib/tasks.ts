@@ -24,6 +24,43 @@ export type TaskSubject = {
 	kind: string;
 };
 
+/**
+ * A refusal that will not change on retry — the account cannot pay for the
+ * call. The task's retry ladder stops here: re-leasing it would only burn
+ * attempts (and, once the balance is topped up, money) for nothing. The
+ * person requeues it themselves after topping up.
+ */
+export function isCreditRefusal(reason: string): boolean {
+	return /not enough credit/i.test(reason);
+}
+
+export async function terminateTask(
+	taskId: string,
+	outcome: string,
+): Promise<TaskSubject | null> {
+	const { count } = await db.agentTask.updateMany({
+		where: { id: taskId, finishedAt: null },
+		data: {
+			finishedAt: new Date(),
+			attempts: MAX_ATTEMPTS,
+			outcome: outcome.slice(0, 500),
+		},
+	});
+
+	if (count === 0) return null;
+
+	return db.agentTask.findUnique({
+		where: { id: taskId },
+		select: {
+			id: true,
+			contactId: true,
+			companyId: true,
+			dealId: true,
+			kind: true,
+		},
+	});
+}
+
 const LEASE_MS = DISPATCH.task.leaseMs;
 
 export { DIRECT_KINDS, MAX_ATTEMPTS } from "@crm/db/agent-tasks";
@@ -76,20 +113,19 @@ export async function retireExhausted(
 	const now = new Date();
 
 	return db.$queryRaw<TaskSubject[]>`
-		UPDATE "agentTask" AS t
-		SET "finishedAt" = ${now},
-			"outcome" = ${RETIRED_OUTCOME}
-		WHERE t.id IN (
-			SELECT c.id
-			FROM "agentTask" AS c
-			WHERE c."finishedAt" IS NULL
-				AND c."attempts" >= ${MAX_ATTEMPTS}
-				AND (c."leasedUntil" IS NULL OR c."leasedUntil" < ${now})
-			ORDER BY c."dueAt" ASC
-			LIMIT ${limit}
-			FOR UPDATE SKIP LOCKED
-		)
-		RETURNING t.id, t."contactId", t."companyId", t."dealId", t.kind;
+        WITH candidates AS MATERIALIZED (
+            SELECT c.id FROM "agentTask" AS c
+            WHERE c."finishedAt" IS NULL
+                AND c."attempts" >= ${MAX_ATTEMPTS}
+                AND (c."leasedUntil" IS NULL OR c."leasedUntil" < ${now})
+            ORDER BY c."dueAt" ASC
+            LIMIT ${limit}
+            FOR UPDATE SKIP LOCKED
+        )
+        UPDATE "agentTask" AS t
+        SET "finishedAt" = ${now}, "outcome" = ${RETIRED_OUTCOME}
+        WHERE t.id IN (SELECT id FROM candidates)
+        RETURNING t.id, t."contactId", t."companyId", t."dealId", t.kind;
 	`;
 }
 

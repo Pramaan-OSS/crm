@@ -12,7 +12,6 @@
 		"dev": {
 			"dependsOn": ["$TURBO_EXTENDS$"],
 			"cache": false,
-			"interactive": true,
 			"persistent": true,
 			"passThroughEnv": [
 				"AGENT_BRIDGE_SECRET",

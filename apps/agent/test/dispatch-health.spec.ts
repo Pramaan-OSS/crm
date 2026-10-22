@@ -63,8 +63,8 @@ describe("dispatch wedging", () => {
 		expect(runs).toBe(2);
 	});
 
-	it("reports health before any sweep has run", () => {
-		const health = dispatchHealth();
+	it("reports health before any sweep has run", async () => {
+		const health = await dispatchHealth();
 
 		expect(health.running).toBe(false);
 		expect(health.abandonedSweeps).toBe(0);
@@ -119,13 +119,13 @@ describe("a direct task that outruns its item deadline", () => {
 		);
 
 		expect(outcomes).toEqual([]);
-		expect(dispatchHealth().pendingItems).toBe(1);
+		expect((await dispatchHealth()).pendingItems).toBe(1);
 
 		gate.release();
 		await flush();
 
 		expect(outcomes).toEqual(["task_direct"]);
-		expect(dispatchHealth().pendingItems).toBe(0);
+		expect((await dispatchHealth()).pendingItems).toBe(0);
 	});
 
 	it("counts nothing in flight when the work lands inside the deadline", async () => {
@@ -140,7 +140,7 @@ describe("a direct task that outruns its item deadline", () => {
 		);
 
 		expect(handled).toBe(1);
-		expect(dispatchHealth().pendingItems).toBe(0);
+		expect((await dispatchHealth()).pendingItems).toBe(0);
 	});
 
 	it("holds a late failure in flight until it lands, then reconciles it", async () => {
@@ -158,13 +158,17 @@ describe("a direct task that outruns its item deadline", () => {
 		);
 
 		expect(raised).toBe(false);
-		expect(dispatchHealth().pendingItems).toBe(1);
+		expect((await dispatchHealth()).pendingItems).toBe(1);
 
 		gate.release();
 		await flush();
 
 		expect(raised).toBe(true);
-		expect(dispatchHealth().pendingItems).toBe(0);
+		// Reconciliation now includes the durable task completion write.
+		const deadline = Date.now() + 2000;
+		while ((await dispatchHealth()).pendingItems && Date.now() < deadline)
+			await flush();
+		expect((await dispatchHealth()).pendingItems).toBe(0);
 	});
 
 	it("settles a failure inside the deadline without leaving it in flight", async () => {
@@ -176,7 +180,7 @@ describe("a direct task that outruns its item deadline", () => {
 			1_000,
 		);
 
-		expect(dispatchHealth().pendingItems).toBe(0);
+		expect((await dispatchHealth()).pendingItems).toBe(0);
 	});
 });
 
@@ -205,7 +209,7 @@ describe("recording the session a research task accepted", () => {
 	});
 
 	it("counts a session it could never record rather than losing it", async () => {
-		const before = dispatchHealth().unlinkedSessions;
+		const before = (await dispatchHealth()).unlinkedSessions;
 
 		const linked = await linkSession(
 			directTask({ id: "task_research", kind: "identify" }),
@@ -217,7 +221,7 @@ describe("recording the session a research task accepted", () => {
 		);
 
 		expect(linked).toBe(false);
-		expect(dispatchHealth().unlinkedSessions).toBe(before + 1);
+		expect((await dispatchHealth()).unlinkedSessions).toBe(before + 1);
 	});
 });
 

@@ -40,7 +40,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Client, type MessageStreamEvent } from "eve/client";
 import type { EveMessage, EveMessageInputRequest } from "eve/react";
 import Link from "next/link";
-import { Fragment, type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -75,6 +75,7 @@ import {
 import { isSharedChatToken } from "@/lib/chat-route";
 import { useTRPC } from "@/lib/trpc/client";
 import type { RouterOutputs } from "@/lib/trpc/types";
+import { useResearchStatus } from "@/lib/use-research-status";
 import { useWorkspaceUrl } from "@/lib/use-workspace-url";
 import { AgentCodeWorkspace } from "./agent-code-workspace";
 import { AgentComposer, type BuilderPrompt } from "./agent-composer";
@@ -94,6 +95,9 @@ import { ShareChatDialog } from "./share-chat-dialog";
 
 type Conversation = RouterOutputs["conversations"]["builderById"];
 type SharedConversation = RouterOutputs["conversations"]["shared"];
+
+/** How long a chat turn may sit with no event before it counts as never started. */
+const RUN_NEVER_STARTED_MS = 20_000;
 
 const BUILDER_STEPS = ["Scope", "Instructions", "Manifest", "Review"] as const;
 const BUILDER_STEP_ARTIFACTS = [
@@ -192,6 +196,7 @@ export function AgentBuilderChat({
 	conversationId: string;
 	initialData: Conversation | SharedConversation | null;
 }) {
+	const research = useResearchStatus();
 	const trpc = useTRPC();
 	const queryClient = useQueryClient();
 	const sharedChat = isSharedChatToken(conversationId);
@@ -274,6 +279,31 @@ export function AgentBuilderChat({
 		}),
 	);
 
+	// A run that never starts (the agent is down, or the bridge is not configured)
+	// must surface as a failure instead of "Thinking" forever. The timer runs from
+	// the moment a message is sent; any transcript event arriving cancels it.
+	const [runDeadline, setRunDeadline] = useState<number | null>(null);
+	const [runNeverStarted, setRunNeverStarted] = useState(false);
+	useEffect(() => {
+		if (runDeadline === null) {
+			setRunNeverStarted(false);
+			return;
+		}
+		const timer = setTimeout(
+			() => setRunNeverStarted(true),
+			RUN_NEVER_STARTED_MS,
+		);
+		return () => clearTimeout(timer);
+	}, [runDeadline]);
+	const eventCount =
+		(liveStream?.events.length ?? 0) + (events.data?.length ?? 0);
+	useEffect(() => {
+		if (eventCount > 0) setRunNeverStarted(false);
+	}, [eventCount]);
+
+	// A run that never starts (the agent is down, or the bridge is not configured)
+	// must surface as a failure instead of "Thinking" forever.
+	const [startTimedOut, setStartTimedOut] = useState(false);
 	if (sharedChat) {
 		if (shared.isPending) {
 			return (
@@ -328,6 +358,10 @@ export function AgentBuilderChat({
 	const failure = latestTurnFailure(transcriptEvents);
 	const creatingAgent = hasCreateAgentCommand(submissions);
 	const working = builderConversationIsWorking(data) && !failure;
+	if (conversation.isError && !conversation.data) {
+		return <ChatUnavailable />;
+	}
+
 	const builderCallActive = agentBuilderCallIsActive(transcriptEvents);
 	const currentSubmissionCreatesAgent =
 		submissions.at(-1)?.commandType === "CREATE_AGENT";
@@ -352,6 +386,8 @@ export function AgentBuilderChat({
 				},
 			},
 		]);
+		setRunDeadline(Date.now() + RUN_NEVER_STARTED_MS);
+		setRunNeverStarted(false);
 
 		try {
 			await submit.mutateAsync({
@@ -494,6 +530,23 @@ export function AgentBuilderChat({
 								</MessageScrollerItem>
 							) : null}
 
+							{runNeverStarted ? (
+								<MessageScrollerItem
+									messageId={`builder-never-started:${conversationId}`}
+								>
+									<div
+										role="alert"
+										className="flex flex-col items-stretch gap-3 rounded-lg border border-destructive/30 bg-card px-4 py-3"
+									>
+										<p className="font-medium text-sm">The run never started</p>
+										<p className="text-pretty text-muted-foreground text-xs leading-5">
+											Check that the research agent is running and that
+											AGENT_BRIDGE_SECRET is set on the API.
+										</p>
+									</div>
+								</MessageScrollerItem>
+							) : null}
+
 							{!working && failure ? (
 								<MessageScrollerItem
 									messageId={`builder-failure:${conversationId}`}
@@ -558,6 +611,13 @@ export function AgentBuilderChat({
 								});
 							}}
 						/>
+					) : research.blocked ? (
+						<div
+							role="alert"
+							className="rounded-lg border border-destructive/30 bg-card px-4 py-3 text-sm"
+						>
+							{research.message}
+						</div>
 					) : (
 						<AgentComposer mode="chat" disabled={working} onSubmit={send} />
 					)}
@@ -1200,12 +1260,10 @@ function BuilderFailureCard({
 }) {
 	const message =
 		failure.kind === "rate-limit"
-			? "Vercel AI Gateway rate-limited this model before it could start. Try again in a moment or add AI Gateway credits in Vercel."
-			: failure.kind === "restricted"
-				? "This model requires paid AI Gateway credits. Add credits in Vercel, then try again."
-				: failure.kind === "credits"
-					? "Vercel AI Gateway has no available credits. Add credits in Vercel, then try again."
-					: "The builder could not finish this request. Try again.";
+			? "The research service rate-limited this run before it could start. Try again in a moment."
+			: failure.kind === "restricted" || failure.kind === "credits"
+				? "Research is not available on this install's platform plan. Ask the workspace owner to check the platform account."
+				: "The builder could not finish this request. Try again.";
 
 	return (
 		<div

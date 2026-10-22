@@ -1,15 +1,11 @@
-import { text as jsonText, record } from "@crm/pramaan";
+import {
+	type OutcomeApproval,
+	type Pramaan,
+	runOutcomeFlow,
+} from "@crm/pramaan";
 import { z } from "zod";
 import type { Evidence } from "./evidence";
-import {
-	looksLikeSameCompany,
-	nameMatchesLocalPart,
-	namesMatch,
-} from "./names";
 import { pramaan } from "./pramaan";
-import { ask } from "./research";
-
-const text = z.string().trim().min(1).nullable().catch(null);
 
 export type Network = "x" | "github";
 
@@ -20,6 +16,7 @@ export type SocialProfile = {
 };
 
 export type Person = {
+	email?: string | null;
 	firstName: string;
 	lastName: string | null;
 	fullName: string;
@@ -151,271 +148,100 @@ export function extractSocialUrls(haystack: string[]): SocialProfile[] {
 	return found;
 }
 
-type GithubUser = {
-	login: string;
-	name: string | null;
-	company: string | null;
-	blog: string | null;
-	bio: string | null;
-	type: string;
-};
+const handleSchema = z.object({
+	network: z.enum(["linkedin", "x", "github"]),
+	handle: z.string(),
+	url: z.string(),
+	verified: z.boolean(),
+	evidence: z.array(z.string()),
+});
+const cache = new Map<
+	string,
+	{ until: number; handles: z.infer<typeof handleSchema>[] }
+>();
+const personKey = (person: Person) => JSON.stringify(person);
 
-async function fetchGithubUser(
-	handle: string,
-): Promise<{ ok: true; user: GithubUser } | { ok: false; reason: string }> {
-	const api = pramaan();
-	if (!api) return { ok: false, reason: "Pramaan is not configured." };
-
-	const url = `https://github.com/${encodeURIComponent(handle)}`;
-
-	try {
-		const response = await api.webExtract({
-			url,
-			schema: {
-				type: "object",
-				properties: {
-					kind: {
-						type: "string",
-						description:
-							"Whether this GitHub account belongs to a person or an organization.",
-					},
-					displayName: {
-						type: "string",
-						description: "The display name on the profile.",
-					},
-					company: {
-						type: "string",
-						description: "The company field on the profile.",
-					},
-					bio: { type: "string", description: "The profile bio." },
-					website: {
-						type: "string",
-						description: "The profile website or blog link.",
-					},
-				},
-			},
-			prompt:
-				"Read this GitHub profile page. Report whether the account is a person or an organization, " +
-				"the display name, the company field, the bio, and the website link. Leave a field out when the page does not show it.",
-		});
-
-		const data = record(response.data);
-		const kind = jsonText(data?.kind)?.toLowerCase() ?? "";
-		const displayName = jsonText(data?.displayName) ?? null;
-		const company = jsonText(data?.company) ?? null;
-		const bio = jsonText(data?.bio) ?? null;
-		const blog = jsonText(data?.website) ?? null;
-
-		if (!displayName && !bio && !company) {
-			return { ok: false, reason: "No such GitHub account." };
-		}
-
+export async function publicHandles(
+	person: Person,
+	approval: OutcomeApproval = {},
+	api: Pramaan | null = pramaan(),
+) {
+	if (!api)
 		return {
-			ok: true,
-			user: {
-				login: handle,
-				name: displayName,
-				company,
-				blog,
-				bio,
-				type:
-					kind.includes("organization") || kind.includes("organis")
-						? "Organization"
-						: "User",
-			},
+			state: "unavailable" as const,
+			reason: "Pramaan is not configured.",
 		};
-	} catch (cause) {
-		return {
-			ok: false,
-			reason: cause instanceof Error ? cause.message : String(cause),
-		};
-	}
+	const input = person.email
+		? { email: person.email }
+		: { name: person.fullName, companyDomain: person.companyDomain };
+	const attempt = await runOutcomeFlow(
+		api,
+		"person.public.brief",
+		input,
+		{},
+		approval,
+	);
+	if (attempt.state !== "done") return attempt;
+	const parsed = z
+		.object({ handles: z.array(handleSchema).max(3).optional() })
+		.safeParse(attempt.report.result);
+	const handles = parsed.success ? (parsed.data.handles ?? []) : [];
+	cache.set(personKey(person), { until: Date.now() + 15 * 60_000, handles });
+	return { ...attempt, handles };
 }
 
-export async function verifyGithub(
+async function verifyReturned(
 	profile: SocialProfile,
 	person: Person,
 ): Promise<Verdict> {
-	const result = await fetchGithubUser(profile.handle);
-	if (!result.ok) return { accepted: false, reason: result.reason };
-
-	const user = result.user;
-
-	if (user.type !== "User") {
+	const saved = cache.get(personKey(person));
+	if (!saved || saved.until <= Date.now()) {
+		cache.delete(personKey(person));
 		return {
 			accepted: false,
-			reason: `github.com/${user.login} is an ${user.type.toLowerCase()} account, not a person.`,
+			reason: "Request and approve a fresh public profile lookup first.",
 		};
 	}
-
-	const evidence: Evidence[] = [];
-	const named = namesMatch(user.name, person.fullName);
-
-	const employed =
-		person.companyName !== null &&
-		user.company !== null &&
-		looksLikeSameCompany(
-			user.company,
-			person.companyName,
-			person.companyDomain ?? "",
-		);
-
-	if (named) {
-		const detail = employed
-			? `the account is named "${user.name}" and its company reads "${user.company}"`
-			: `the account is named "${user.name}"`;
-		evidence.push({
-			kind: "github.account-identity",
-			detail,
-			sourceUrl: profile.url,
-		});
-	} else if (employed) {
-		evidence.push({
-			kind: "employer-only",
-			detail: `its company reads "${user.company}" but the account is named "${user.name ?? "—"}"`,
-			sourceUrl: profile.url,
-		});
-	}
-
-	if (person.companyDomain) {
-		const mentions = [user.blog, user.bio]
-			.filter((field): field is string => Boolean(field))
-			.some((field) =>
-				field.toLowerCase().includes(person.companyDomain as string),
-			);
-		if (mentions) {
-			evidence.push({
-				kind: "web.cited-claim",
-				detail: `the profile links ${person.companyDomain}`,
-				sourceUrl: profile.url,
-			});
-		}
-	}
-
+	const rows = saved.handles.filter((row) => row.network === profile.network);
+	const row = rows.length === 1 ? rows[0] : undefined;
+	const parsed = row && parseSocialUrl(row.url);
 	if (
-		nameMatchesLocalPart(
-			{ firstName: person.firstName, lastName: person.lastName },
-			profile.handle,
-		)
-	) {
-		evidence.push({
-			kind: "handle.name-form",
-			detail: `the handle "${profile.handle}" is a form of their name`,
-			sourceUrl: profile.url,
-		});
-	}
-
-	if (evidence.length === 0) {
+		!row?.verified ||
+		!row.evidence.length ||
+		!parsed ||
+		parsed.handle !== profile.handle ||
+		parsed.network !== profile.network ||
+		row.handle.toLowerCase().replace(/^@/, "") !== parsed.handle
+	)
 		return {
 			accepted: false,
-			reason:
-				`github.com/${user.login} says nothing connecting it to ${person.fullName}: ` +
-				`name "${user.name ?? "—"}", company "${user.company ?? "—"}".`,
+			reason: "This handle has no verified link to the established person.",
 		};
-	}
-
-	return { accepted: true, profile, evidence };
-}
-
-export async function verifyX(
-	profile: SocialProfile,
-	person: Person,
-): Promise<Verdict> {
-	if (
-		person.companyName &&
-		looksLikeSameCompany(
-			profile.handle,
-			person.companyName,
-			person.companyDomain ?? "",
-		)
-	) {
-		return {
-			accepted: false,
-			reason: `x.com/${profile.handle} looks like ${person.companyName}'s own account, not ${person.fullName}'s.`,
-		};
-	}
-
-	if (
-		!nameMatchesLocalPart(
-			{ firstName: person.firstName, lastName: person.lastName },
-			profile.handle,
-		)
-	) {
-		return {
-			accepted: false,
-			reason:
-				`x.com/${profile.handle} is not a form of "${person.fullName}", and X profiles cannot be read to check. ` +
-				"Leave it empty.",
-		};
-	}
-
-	const answer = await ask(
-		`Is https://x.com/${profile.handle} the X (Twitter) account of ${person.fullName}` +
-			`${person.title ? `, ${person.title}` : ""}` +
-			`${person.companyName ? ` at ${person.companyName}` : ""}? ` +
-			"Answer yes or no and give the profile URL.",
-	);
-
-	if (!answer.ok) {
-		return {
-			accepted: false,
-			reason: `Could not corroborate: ${answer.reason}`,
-		};
-	}
-
-	const cited = extractSocialUrls(answer.data.citations).some(
-		(candidate) =>
-			candidate.network === "x" && candidate.handle === profile.handle,
-	);
-
-	if (!cited) {
-		return {
-			accepted: false,
-			reason:
-				`Nothing retrieved for "${person.fullName}" cites x.com/${profile.handle}. ` +
-				"A handle that merely resembles their name is a guess.",
-		};
-	}
-
 	return {
 		accepted: true,
-		profile,
-		evidence: [
-			{
-				kind: "handle.name-form",
-				detail: `the handle "${profile.handle}" is a form of their name`,
-				sourceUrl: profile.url,
-			},
-			{
-				kind: "search.cites-profile",
-				detail: `a search for ${person.fullName} cites this profile`,
-				sourceUrl: profile.url,
-			},
-		],
+		profile: parsed,
+		evidence: row.evidence.map((detail) => ({
+			kind: "public-profile.link",
+			detail,
+			sourceUrl: parsed.url,
+		})),
 	};
 }
+export const verifyGithub = verifyReturned;
+export const verifyX = verifyReturned;
 
-export async function findSocialCandidates(
-	person: Person,
-	network: Network,
-): Promise<{ candidates: SocialProfile[]; citations: string[] }> {
-	const where = network === "x" ? "X (Twitter)" : "GitHub";
-	const domains = network === "x" ? ["x.com", "twitter.com"] : ["github.com"];
-
-	const answer = await ask(
-		`What is the ${where} profile of ${person.fullName}` +
-			`${person.title ? `, ${person.title}` : ""}` +
-			`${person.companyName ? ` at ${person.companyName}` : ""}` +
-			`${person.companyDomain ? ` (${person.companyDomain})` : ""}? ` +
-			"Reply with the profile URL only, or say you do not know.",
-	);
-
-	if (!answer.ok) return { candidates: [], citations: [] };
-
-	const candidates = extractSocialUrls([
-		answer.data.text,
-		...answer.data.citations,
-	]).filter((candidate) => candidate.network === network);
-
-	return { candidates, citations: answer.data.citations };
+/** Read already checked candidates without making another paid request. */
+export async function findSocialCandidates(person: Person, network: Network) {
+	const saved = cache.get(personKey(person));
+	const rows =
+		saved && saved.until > Date.now()
+			? saved.handles.filter((row) => row.network === network)
+			: [];
+	return {
+		candidates: rows.flatMap((row) => {
+			const parsed = parseSocialUrl(row.url);
+			return parsed ? [parsed] : [];
+		}),
+		citations: rows.flatMap((row) => row.evidence),
+	};
 }

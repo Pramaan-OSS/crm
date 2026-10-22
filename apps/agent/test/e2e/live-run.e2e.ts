@@ -12,11 +12,7 @@ if (process.env.E2E_LIVE_MODEL !== "1") {
 	process.exit(0);
 }
 
-async function seedAgent(
-	channelId: string,
-	channelName: string,
-	modelId: string,
-) {
+async function seedAgent(recipientEmail: string) {
 	const owner = await db.user.findFirstOrThrow({ select: { id: true } });
 	const agent = await db.agentDefinition.create({
 		data: {
@@ -32,8 +28,7 @@ async function seedAgent(
 			agentId: agent.id,
 			number: 1,
 			status: "DEPLOYED",
-			instructions: `Post exactly one short Slack message to #${channelName} that says "E2E live run — ignore this message." Do nothing else.`,
-			modelId,
+			instructions: `Send exactly one short email to ${recipientEmail} that says "E2E live run — ignore this email." Do nothing else.`,
 			sandboxPolicy: {},
 			createdById: owner.id,
 			manifest: {
@@ -49,14 +44,14 @@ async function seedAgent(
 				dataScope: { mode: "WORKSPACE", summary: "Workspace", resources: [] },
 				actions: [
 					{
-						type: "slack.message.post",
-						provider: "slack",
-						summary: `Post one message to #${channelName}`,
+						type: "email.send",
+						provider: "email",
+						summary: `Send one note to ${recipientEmail}`,
 						destination: {
-							kind: "channel",
+							kind: "mailbox",
 							resolution: "chosen",
-							id: channelId,
-							label: `#${channelName}`,
+							id: recipientEmail,
+							label: recipientEmail,
 						},
 					},
 				],
@@ -77,31 +72,15 @@ async function main() {
 		process.exit(1);
 	}
 
-	const channel = await db.slackChannel.findFirst({
-		where: { available: true, name: "test" },
-		select: { id: true, name: true },
+	const owner = await db.user.findFirstOrThrow({
+		select: { email: true },
 	});
-	if (!channel) {
-		console.error("FAIL  No available #test channel. Connect Slack first.");
+	if (!owner.email) {
+		console.error("FAIL  The owner has no email to send to.");
 		process.exit(1);
 	}
 
-	const settings = await db.appSetting.findUnique({
-		where: { id: "app" },
-		select: { agentModelId: true },
-	});
-	if (!settings?.agentModelId) {
-		console.error(
-			"FAIL  No model is configured. Pick one on the settings page first.",
-		);
-		process.exit(1);
-	}
-
-	const { agentId, versionId, ownerId } = await seedAgent(
-		channel.id,
-		channel.name,
-		settings.agentModelId,
-	);
+	const { agentId, versionId, ownerId } = await seedAgent(owner.email);
 	let ok = false;
 
 	try {
@@ -165,13 +144,13 @@ async function main() {
 				);
 			}
 
-			const posted = actions.some(
+			const sent = actions.some(
 				(action) =>
-					action.type === "slack.message.post" &&
+					action.type === "email.send" &&
 					action.status === "SUCCEEDED" &&
 					Boolean(action.externalId),
 			);
-			ok = final?.status === "SUCCEEDED" && posted;
+			ok = final?.status === "SUCCEEDED" && sent;
 		}
 	} finally {
 		try {

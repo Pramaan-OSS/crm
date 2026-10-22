@@ -50,6 +50,8 @@ export type GraphFolder = {
 function address(source: JsonValue): GraphAddress | undefined {
 	const direct = text(source);
 	if (direct) return { emailAddress: { address: direct } };
+	const fields = record(source);
+	if (fields?.emailAddress) return address(fields.emailAddress);
 	const addressValue = firstText(source, ["address", "email"]);
 	if (!addressValue) return undefined;
 	return {
@@ -97,7 +99,7 @@ export class GraphClient {
 		_wellKnownName: string,
 	): Promise<MailboxResult<GraphFolder>> {
 		// Actions read the inbox directly; a folder id is not needed.
-		return { outcome: "ok", data: { id: "inbox" } };
+		return { outcome: "ok", data: { id: _wellKnownName } };
 	}
 
 	async listMessages(
@@ -107,11 +109,12 @@ export class GraphClient {
 		const result = await this.apps.executeAction(
 			accessToken,
 			"outlook",
-			"fetch",
+			"OUTLOOK_LIST_MAIL_FOLDER_MESSAGES",
 			{
-				folder: "inbox",
-				after: options.after.toISOString(),
-				maxResults: options.top,
+				mail_folder_id: "inbox",
+				filter: `receivedDateTime ge ${options.after.toISOString()}`,
+				orderby: "receivedDateTime asc",
+				top: options.top,
 			},
 		);
 
@@ -130,11 +133,9 @@ export class GraphClient {
 			const id = firstText(fields, ["id", "messageId"]);
 			if (!fields || !id) return [];
 
-			const bodyContent = firstText(fields, [
-				"bodyText",
-				"body",
-				"bodyPreview",
-			]);
+			const bodyContent =
+				firstText(fields, ["bodyText", "body", "bodyPreview"]) ??
+				firstText(fields.body, ["content"]);
 
 			return [
 				{
@@ -154,6 +155,9 @@ export class GraphClient {
 						? { contentType: "text", content: bodyContent }
 						: undefined,
 					bodyPreview: text(fields.bodyPreview),
+					parentFolderId: text(fields.parentFolderId),
+					internetMessageHeaders:
+						fields.internetMessageHeaders as GraphMessage["internetMessageHeaders"],
 				},
 			];
 		});

@@ -2,8 +2,6 @@
 
 import Launch from "@carbon/icons-react/es/Launch";
 import Warning from "@carbon/icons-react/es/Warning";
-import { authClient } from "@crm/auth/client";
-import { SYNC_SCOPES } from "@crm/auth/scopes";
 import {
 	Alert,
 	AlertAction,
@@ -39,12 +37,15 @@ import { StatusIndicator } from "@crm/ui/components/status-indicator";
 import { Switch } from "@crm/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ConnectionNotice } from "@/components/connections/connection-notice";
 import { LocalRelativeTime } from "@/components/local-date-time";
 import { isSyncing, SYNC_POLL_MS } from "@/lib/sync-status";
 import { useCrmCache } from "@/lib/trpc/cache";
 import { useTRPC } from "@/lib/trpc/client";
+
+const CHAIN_GUARD_KEY = "google-calendar-chain";
 
 const SOURCES = {
 	calendar: {
@@ -56,6 +57,19 @@ const SOURCES = {
 		autoCreate: "Add the company and contact when you reply to someone new",
 	},
 } as const;
+
+/**
+ * After a Gmail connect, the platform starts only the mailbox. When the user
+ * comes back with mail connected and the calendar not, chain the calendar
+ * connection once — the original Google consent granted both together.
+ */
+export function calendarChainNeeded(
+	sources: readonly { source: string; connected: boolean }[],
+): boolean {
+	const gmail = sources.find((source) => source.source === "gmail");
+	const calendar = sources.find((source) => source.source === "calendar");
+	return Boolean(gmail?.connected) && calendar?.connected === false;
+}
 
 const RESOLVE_HOSTS = [
 	"console.cloud.google.com",
@@ -115,8 +129,10 @@ function GoogleUnavailable() {
 					</div>
 				</CardTitle>
 				<CardDescription>
-					Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the root .env file
-					and restart.
+					Set GOOGLE_CLIENT_ID in the root .env file, connect the sign-in
+					account on the platform, and make sure PRAMAAN_API_KEY is set. The
+					sign-in code is exchanged through Pramaan — no client secret lives
+					here.
 				</CardDescription>
 			</CardHeader>
 		</Card>
@@ -137,6 +153,7 @@ function ConnectGoogle({
 	slug: string;
 	connectError?: string;
 }) {
+	const trpc = useTRPC();
 	const [pending, setPending] = useState(false);
 
 	function fail(message?: string) {
@@ -144,19 +161,28 @@ function ConnectGoogle({
 		toast.error(message ?? "Could not reach Google.");
 	}
 
-	async function handleConnect() {
+	// The mailbox connects through the platform's hosted sign-in link: the API
+	// starts it, the browser goes there, and the connection comes back here.
+	const connect = useMutation(
+		trpc.google.connect.mutationOptions({
+			onSuccess: (result) => {
+				if (result.connectUrl) {
+					window.location.assign(result.connectUrl);
+					return;
+				}
+				fail(result.error ?? undefined);
+			},
+			onError: (error) => fail(error.message),
+		}),
+	);
+
+	function handleConnect() {
 		setPending(true);
-
 		const origin = window.location.origin;
-
-		const { error } = await authClient.linkSocial({
-			provider: "google",
-			scopes: [...SYNC_SCOPES],
-			callbackURL: `${origin}/${slug}/settings/connections/google`,
-			errorCallbackURL: `${origin}/${slug}/settings/connections/google?provider=google`,
+		connect.mutate({
+			source: "gmail",
+			redirectUrl: `${origin}/${slug}/settings/connections/google`,
 		});
-
-		if (error) fail(error.message);
 	}
 
 	return (
@@ -169,8 +195,8 @@ function ConnectGoogle({
 					</div>
 				</CardTitle>
 				<CardDescription>
-					Read-only Gmail and Calendar. Only conversations with companies in the
-					CRM are stored.
+					Only conversations with companies in the CRM are stored.
+					<ConnectionNotice slug="google" appName="Google Workspace" />
 				</CardDescription>
 
 				<CardAction>
@@ -178,7 +204,7 @@ function ConnectGoogle({
 						size="sm"
 						disabled={pending}
 						onClick={() => {
-							handleConnect().catch(() => fail());
+							handleConnect();
 						}}
 						type="button"
 					>
@@ -255,6 +281,44 @@ export function GoogleConnection({
 	);
 
 	const [insistence, setInsistence] = useState(0);
+	const [chainFailed, setChainFailed] = useState(false);
+	const chainDone = useRef(false);
+
+	// Gmail connects the mailbox; the calendar chains afterwards (once) so the
+	// single Google consent the person just finished still covers both.
+	const connect = useMutation(
+		trpc.google.connect.mutationOptions({
+			onSuccess: (result) => {
+				if (result.connectUrl) {
+					sessionStorage.setItem(CHAIN_GUARD_KEY, "done");
+					window.location.assign(result.connectUrl);
+					return;
+				}
+				setChainFailed(true);
+			},
+			onError: () => setChainFailed(true),
+		}),
+	);
+
+	const connectSource = (source: "gmail" | "calendar") => {
+		const origin = window.location.origin;
+		connect.mutate({
+			source,
+			redirectUrl: `${origin}/${slug}/settings/connections/google`,
+		});
+	};
+
+	useEffect(() => {
+		if (chainFailed || chainDone.current) return;
+		if (sessionStorage.getItem(CHAIN_GUARD_KEY) === "done") return;
+		if (!status.data || !calendarChainNeeded(status.data.sources)) return;
+		chainDone.current = true;
+		sessionStorage.setItem(CHAIN_GUARD_KEY, "done");
+		connect.mutate({
+			source: "calendar",
+			redirectUrl: `${window.location.origin}/${slug}/settings/connections/google`,
+		});
+	}, [status.data, chainFailed, connect, slug]);
 
 	const syncNow = useMutation(
 		trpc.google.syncNow.mutationOptions({
@@ -390,14 +454,27 @@ export function GoogleConnection({
 								</span>
 							</Label>
 
-							<Switch
-								id={`auto-create-${source.source}`}
-								checked={source.autoCreate}
-								disabled={setAutoCreate.isPending}
-								onCheckedChange={(enabled) =>
-									setAutoCreate.mutate({ source: source.source, enabled })
-								}
-							/>
+							{!source.connected ? (
+								<Button
+									variant="outline"
+									size="xs"
+									disabled={connect.isPending}
+									onClick={() =>
+										connectSource(source.source as "gmail" | "calendar")
+									}
+								>
+									Connect
+								</Button>
+							) : (
+								<Switch
+									id={`auto-create-${source.source}`}
+									checked={source.autoCreate}
+									disabled={setAutoCreate.isPending}
+									onCheckedChange={(enabled) =>
+										setAutoCreate.mutate({ source: source.source, enabled })
+									}
+								/>
+							)}
 						</div>
 					);
 				})}

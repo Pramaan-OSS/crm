@@ -66,7 +66,13 @@ export class AgentTriggerService {
 		});
 	}
 
-	async companyRequested(companyId: string, reason: string): Promise<boolean> {
+	async companyRequested(
+		companyId: string,
+		reason: string,
+		options: { fresh?: boolean } = {},
+	): Promise<boolean> {
+		const payload = options.fresh ? { fresh: true } : undefined;
+
 		const brand = await this.enqueue(
 			{
 				companyId,
@@ -74,6 +80,7 @@ export class AgentTriggerService {
 				reason,
 				priority: PRIORITY.brand,
 				budget: 2,
+				payload,
 			},
 			true,
 		);
@@ -85,6 +92,7 @@ export class AgentTriggerService {
 				reason,
 				priority: PRIORITY.requested,
 				budget: 8,
+				payload,
 			},
 			true,
 		);
@@ -105,6 +113,7 @@ export class AgentTriggerService {
 		contactId: string,
 		reason: string,
 		required = false,
+		options: { fresh?: boolean } = {},
 	): Promise<boolean> {
 		return this.enqueue(
 			{
@@ -113,6 +122,7 @@ export class AgentTriggerService {
 				reason,
 				priority: PRIORITY.identify,
 				budget: 4,
+				payload: options.fresh ? { fresh: true } : undefined,
 			},
 			required,
 		);

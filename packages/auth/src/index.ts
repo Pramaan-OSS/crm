@@ -4,14 +4,30 @@ export {
 	API_KEY_PREFIX,
 	DAY_SECONDS,
 } from "./api-keys";
-export { type Auth, auth, type Session, type SessionUser } from "./auth";
+export {
+	type Auth,
+	auth,
+	MANAGED_PROVIDER_ID,
+	type Session,
+	type SessionUser,
+} from "./auth";
 export { AUTH_COOKIE_PREFIX, SESSION_COOKIE_NAME } from "./cookies";
 export {
 	apiUrl,
 	appUrl,
 	isGoogleConfigured,
 	isMicrosoftConfigured,
+	trustedOrigins,
 } from "./env";
+export {
+	ensureManagedBackend,
+	type ManagedBackend,
+	managedBackend,
+	managedPramaan,
+	managedReturnOrigins,
+	resetManagedForTests,
+	setManagedPramaanForTests,
+} from "./managed";
 export {
 	canChangeRole,
 	canManageConnections,

@@ -124,6 +124,8 @@ export class DashboardService {
 						select: {
 							id: true,
 							name: true,
+							logoUrl: true,
+							logoDarkUrl: true,
 							iconUrl: true,
 							iconDarkUrl: true,
 							iconTone: true,

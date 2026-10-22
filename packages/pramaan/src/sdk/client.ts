@@ -1,17 +1,17 @@
-// The Pramaan client. `fetch` only, no Node built-ins, so it runs in Node, Next.js, Bun and
-// Workers. Vendored from @pramaan/sdk; the generated per-capability catalog and sugar are
-// replaced by this product's own mini-catalog and typed helpers (see ../capabilities.ts).
+import type { PramaanOptions } from "@pramaan/sdk";
+import { DEFAULT_BASE_URL, Pramaan as PublishedPramaan } from "@pramaan/sdk";
+import { workspaceFileId, workspaceLogo } from "../logo-file";
+// Compatibility helpers for product behavior absent from @pramaan/sdk 0.1.0.
 
 import { capabilityInfo } from "../catalog";
 import { errorFromResponse, PramaanError } from "./errors";
 import type {
-	CapabilityDescription,
 	CapabilityInfo,
-	CapabilitySummary,
-	ErrorCode,
-	Estimate,
 	Job,
-	JobStatus,
+	LlmChatStreamEvent,
+	OutcomeRun,
+	OutcomeRunOptions,
+	OutcomeRunStep,
 	RunOptions,
 	WaitOptions,
 } from "./types";
@@ -19,123 +19,82 @@ import type {
 /**
  * The hosted API's URL: the one place the API domain is set.
  */
-export const PRAMAAN_API_URL = "https://api.pramaan.dev";
-export const DEFAULT_BASE_URL = PRAMAAN_API_URL;
+export { DEFAULT_BASE_URL, PRAMAAN_API_URL } from "@pramaan/sdk";
+
 export const MIN_POLL_MS = 2_000;
 const MAX_POLL_MS = 30_000;
 const DEFAULT_WAIT_MS = 31 * 60_000;
 const RETRY_BASE_MS = 500;
 const RETRY_MAX_MS = 8_000;
 
-export interface PramaanOptions {
-	readonly apiKey: string;
-	/** Default: the hosted API. Point elsewhere for a dev or test API. */
-	readonly baseUrl?: string;
-	/** Retries for `read_only` calls on 429/5xx/network errors. Default 2. */
-	readonly maxRetries?: number;
-	/** Custom fetch (tests, proxies). Default: the global fetch. */
-	readonly fetch?: (input: string, init: RequestInit) => Promise<Response>;
-	/** Custom sleep (tests). Default: setTimeout. */
-	readonly sleep?: (ms: number) => Promise<void>;
-}
-
-interface ApiResponse {
-	readonly status: number;
-	readonly body: unknown;
-}
-
-type Started = { readonly job: Job } | { readonly result: unknown };
-
-const JOB_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
-	"running",
-	"done",
-	"failed",
-	"cancelled",
-]);
-
-/** A bulk run's progress, when the API sent one with whole numbers in it. */
-function progressOf(value: unknown): Pick<Job, "progress"> | undefined {
-	const { total, done } = (value ?? {}) as { total?: unknown; done?: unknown };
-	return Number.isInteger(total) && Number.isInteger(done)
-		? { progress: { total: total as number, done: done as number } }
-		: undefined;
-}
-
-function toJob(body: unknown, capability: string): Job {
-	const raw = (body ?? {}) as Record<string, unknown>;
-	const status = String(raw.status);
-	if (typeof raw.job_id !== "string" || !JOB_STATUSES.has(status)) {
-		throw new PramaanError(
-			"internal",
-			"The API returned an unexpected job shape.",
-		);
-	}
-	const error = raw.error as { code?: unknown; message?: unknown } | undefined;
-	return {
-		id: raw.job_id,
-		capability:
-			typeof raw.capability === "string" ? raw.capability : capability,
-		status: status as JobStatus,
-		...("result" in raw ? { result: raw.result } : {}),
-		...(progressOf(raw.progress) ?? {}),
-		...(error
-			? {
-					error: {
-						code: String(error.code) as ErrorCode,
-						message: String(error.message),
-					},
-				}
-			: {}),
-		...(typeof raw.created_at === "string"
-			? { createdAt: raw.created_at }
-			: {}),
-		...(typeof raw.updated_at === "string"
-			? { updatedAt: raw.updated_at }
-			: {}),
-	};
-}
-
-function toSummary(raw: Record<string, unknown>): CapabilitySummary {
-	return {
-		id: String(raw.id),
-		description: String(raw.description),
-		effectClass: raw.effect_class as CapabilityInfo["effectClass"],
-		mode: raw.mode === "async" ? "async" : "sync",
-		needsConnection: raw.needs_connection === true,
-		...(raw.requires_approval === true ? { requiresApproval: true } : {}),
-		priceEstimateMicro: Number(raw.price_estimate_micro ?? 0),
-	};
-}
-
-function toDescription(raw: Record<string, unknown>): CapabilityDescription {
-	return {
-		...toSummary(raw),
-		example: raw.example,
-		requestSchema: (raw.request_schema ?? {}) as Record<string, unknown>,
-		resultSchema: (raw.result_schema ?? {}) as Record<string, unknown>,
-	};
-}
-
-async function readBody(response: Response): Promise<unknown> {
-	const text = await response.text();
-	if (text === "") return undefined;
-	try {
-		return JSON.parse(text);
-	} catch {
-		throw new PramaanError(
-			"internal",
-			"The API returned a response that is not JSON.",
-			{
-				requestId: response.headers.get("x-request-id") ?? undefined,
-				status: response.status,
-			},
-		);
-	}
-}
+export type { PramaanOptions } from "@pramaan/sdk";
 
 export class PramaanClient {
-	readonly #apiKey: string;
-	readonly #baseUrl: string;
+	readonly #sdkOptions: PramaanOptions;
+	// Scope response metadata to one operation, including concurrent requests.
+	async #usingSdk<T>(
+		operation: (client: InstanceType<typeof PublishedPramaan>) => Promise<T>,
+		opts?: RunOptions,
+	): Promise<T> {
+		let lastError: PramaanError | undefined;
+		const client = new PublishedPramaan({
+			...this.#sdkOptions,
+			// Retries are controlled here: chat and outcome starts are never repeated.
+			maxRetries: 0,
+			fetch: async (url, init) => {
+				const method = init.method ?? "GET";
+				const path = new URL(url).pathname;
+				const id = decodeURIComponent(path.split("/").pop() ?? "");
+				const retry =
+					method === "GET" ||
+					path.endsWith("/estimate") ||
+					(path.includes("/capabilities/") &&
+						id !== "llm.chat" &&
+						capabilityInfo(id)?.effectClass === "read_only");
+				const headers = new Headers(init.headers);
+				if (opts?.idempotencyKey === undefined)
+					headers.delete("Idempotency-Key");
+				if (opts?.fresh) headers.set("Pramaan-Fresh", "1");
+				for (let attempt = 0; ; attempt++) {
+					try {
+						const response = await this.#fetch(url, { ...init, headers });
+						if (response.ok) {
+							lastError = undefined;
+							return response;
+						}
+						const previous = lastError;
+						lastError = await errorFromResponse(response.clone());
+						if (
+							previous &&
+							lastError.code === "conflict" &&
+							lastError.retryable
+						) {
+							lastError = previous;
+							return response;
+						}
+						if (
+							!retry ||
+							(response.status !== 429 && response.status < 500) ||
+							attempt >= this.#maxRetries
+						)
+							return response;
+					} catch (error) {
+						if (!retry || attempt >= this.#maxRetries) throw error;
+					}
+					await this.#sleep(
+						lastError?.retryAfterMs ??
+							Math.min(RETRY_BASE_MS * 2 ** attempt, RETRY_MAX_MS),
+					);
+				}
+			},
+		});
+		try {
+			return await operation(client);
+		} catch (error) {
+			throw lastError ?? error;
+		}
+	}
+
 	readonly #maxRetries: number;
 	readonly #fetch: (input: string, init: RequestInit) => Promise<Response>;
 	readonly #sleep: (ms: number) => Promise<void>;
@@ -147,13 +106,51 @@ export class PramaanClient {
 				"Pass apiKey to new PramaanClient().",
 			);
 		}
-		this.#apiKey = options.apiKey;
-		this.#baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+		this.#sdkOptions = options;
 		this.#maxRetries = options.maxRetries ?? 2;
 		this.#fetch = options.fetch ?? ((input, init) => fetch(input, init));
 		this.#sleep =
 			options.sleep ??
 			((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+	}
+
+	/** Reads workspace metadata, then downloads its signed link without forwarding the key. */
+	async fileDownload(fileId: string): Promise<Response> {
+		workspaceFileId.parse(fileId);
+		const base = (this.#sdkOptions.baseUrl ?? DEFAULT_BASE_URL).replace(
+			/\/$/,
+			"",
+		);
+		const metadata = await this.#fetch(`${base}/v1/files/${fileId}`, {
+			headers: { Authorization: `Bearer ${this.#sdkOptions.apiKey}` },
+			redirect: "error",
+			signal: AbortSignal.timeout(15_000),
+		});
+		if (!metadata.ok) throw await errorFromResponse(metadata);
+		const file = (await metadata.json()) as {
+			fileId: string;
+			contentType: string;
+			sizeBytes: number;
+			url: string;
+		};
+		workspaceLogo.parse({ ...file, size: file.sizeBytes });
+		const link = new URL(file.url);
+		if (
+			file.fileId !== fileId ||
+			link.origin !== new URL(base).origin ||
+			link.pathname !== `/files/${fileId}` ||
+			link.username ||
+			link.password
+		) {
+			throw new PramaanError(
+				"upstream_unavailable",
+				"Invalid file download link.",
+			);
+		}
+		return this.#fetch(link.toString(), {
+			redirect: "error",
+			signal: AbortSignal.timeout(15_000),
+		});
 	}
 
 	/** Sync capability: its result. Async capability: a running Job (see `jobs.wait`). */
@@ -162,24 +159,15 @@ export class PramaanClient {
 		input: unknown,
 		opts: RunOptions = {},
 	): Promise<unknown> {
-		const started = await this.#start(id, input, opts);
-		return "job" in started ? started.job : started.result;
+		return this.#usingSdk((client) => client.run(id, input, opts), opts);
 	}
 
-	/** Runs a capability and, when it is async, waits for the job to finish. */
 	async call(
 		id: string,
 		input: unknown,
 		opts: RunOptions = {},
 	): Promise<unknown> {
-		const started = await this.#start(id, input, opts);
-		if (!("job" in started)) return started.result;
-		const job = await this.jobs.wait(started.job.id);
-		if (job.status === "done") return job.result;
-		throw new PramaanError(
-			job.error?.code ?? "internal",
-			job.error?.message ?? `The job ended with status "${job.status}".`,
-		);
+		return this.#usingSdk((client) => client.call(id, input, opts), opts);
 	}
 
 	/** Traits of one capability, from this product's mini-catalog. Sync and offline. */
@@ -188,28 +176,10 @@ export class PramaanClient {
 	}
 
 	readonly jobs = {
-		get: async (id: string): Promise<Job> =>
-			toJob(
-				(
-					await this.#request("GET", `/v1/jobs/${encodeURIComponent(id)}`, {
-						retry: true,
-					})
-				).body,
-				"",
-			),
-
-		/** Cancels a running job (no-op for a finished one). Never retried automatically. */
-		cancel: async (id: string): Promise<Job> =>
-			toJob(
-				(
-					await this.#request(
-						"POST",
-						`/v1/jobs/${encodeURIComponent(id)}/cancel`,
-						{},
-					)
-				).body,
-				"",
-			),
+		get: (id: string): Promise<Job> =>
+			this.#usingSdk((client) => client.jobs.get(id)),
+		cancel: (id: string): Promise<Job> =>
+			this.#usingSdk((client) => client.jobs.cancel(id)),
 
 		/**
 		 * Polls until the job is no longer running (every 2 s or more, growing 1.5x to 30 s) and
@@ -219,160 +189,180 @@ export class PramaanClient {
 			const deadline = Date.now() + (options.timeoutMs ?? DEFAULT_WAIT_MS);
 			let interval = Math.max(MIN_POLL_MS, options.intervalMs ?? MIN_POLL_MS);
 			for (;;) {
+				if (options.signal?.aborted) return this.jobs.cancel(id);
 				const job = await this.jobs.get(id);
 				if (job.status !== "running") return job;
 				if (Date.now() + interval > deadline) {
 					throw new PramaanError(
 						"upstream_timeout",
 						"The job is still running after timeoutMs.",
-						{ retryable: true },
+						{
+							retryable: false,
+							jobId: id,
+						},
 					);
 				}
-				await this.#sleep(interval);
+				if (options.signal) {
+					const signal = options.signal;
+					let wake: () => void = () => {};
+					const aborted = new Promise<void>((resolve) => {
+						wake = resolve;
+						signal.addEventListener("abort", wake, { once: true });
+					});
+					try {
+						if (!signal.aborted)
+							await Promise.race([this.#sleep(interval), aborted]);
+					} finally {
+						signal.removeEventListener("abort", wake);
+					}
+				} else await this.#sleep(interval);
 				interval = Math.min(Math.ceil(interval * 1.5), MAX_POLL_MS);
 			}
 		},
 	};
 
 	readonly capabilities = {
-		/** Every capability the API serves, with its price estimate. */
-		list: async (): Promise<CapabilitySummary[]> => {
-			const { body } = await this.#request("GET", "/v1/capabilities", {
-				retry: true,
-			});
-			return (
-				(body as { results?: Record<string, unknown>[] }).results ?? []
-			).map(toSummary);
-		},
-		/** One capability with its request and result JSON Schema and an example. */
-		get: async (id: string): Promise<CapabilityDescription> => {
-			const { body } = await this.#request(
-				"GET",
-				`/v1/capabilities/${encodeURIComponent(id)}`,
-				{ retry: true },
-			);
-			return toDescription(body as Record<string, unknown>);
-		},
-		/** What this request would cost at most, without running it. Nothing is charged. */
-		estimate: async (
+		list: () => this.#usingSdk((client) => client.capabilities.list()),
+		get: (id: string) =>
+			this.#usingSdk((client) => client.capabilities.get(id)),
+		estimate: (id: string, input: unknown, opts: RunOptions = {}) =>
+			this.#usingSdk(
+				(client) => client.capabilities.estimate(id, input, opts),
+				opts,
+			),
+	};
+
+	readonly outcomes = {
+		list: () => this.#usingSdk((client) => client.outcomes.list()),
+		get: (id: string) => this.#usingSdk((client) => client.outcomes.get(id)),
+		estimate: (id: string, input: unknown, opts: OutcomeRunOptions = {}) =>
+			this.#usingSdk(
+				(client) => client.outcomes.estimate(id, input, opts),
+				opts,
+			),
+		run: async (
 			id: string,
 			input: unknown,
-			opts: RunOptions = {},
-		): Promise<Estimate> => {
-			const { body } = await this.#request(
-				"POST",
-				`/v1/capabilities/${encodeURIComponent(id)}/estimate`,
-				{ body: input ?? {}, headers: priceHeaders(opts), retry: true },
+			opts: OutcomeRunOptions = {},
+		): Promise<OutcomeRun> => {
+			const started = await this.#usingSdk(
+				(client) => client.outcomes.start(id, input, opts),
+				opts,
 			);
-			const raw = body as Record<string, unknown>;
-			return {
-				priceMaxMicro: Number(raw.price_max_micro ?? 0),
-				balanceMicro: Number(raw.balance_micro ?? 0),
-				canRun: raw.can_run === true,
-				...(typeof raw.reason === "string"
-					? { reason: raw.reason as NonNullable<Estimate["reason"]> }
-					: {}),
-			};
+			if (!("id" in started)) return started;
+			const jobId = started.id;
+			let job: Job;
+			try {
+				job = await this.jobs.wait(jobId, {
+					timeoutMs: 36 * 60_000,
+					...(opts.signal ? { signal: opts.signal } : {}),
+				});
+			} catch (error) {
+				throw new PramaanError(
+					error instanceof PramaanError ? error.code : "upstream_unavailable",
+					"The accepted research job could not be confirmed. Check its status before retrying.",
+					{ jobId },
+				);
+			}
+			if (job.result !== undefined) {
+				const report = toOutcomeRun(job.result);
+				return {
+					...report,
+					...(job.status === "failed" || job.status === "cancelled"
+						? { status: job.status }
+						: {}),
+					...(!report.error && job.error ? { error: job.error } : {}),
+				};
+			}
+			throw new PramaanError(
+				job.error?.code ?? "internal",
+				job.error?.message ?? `The run ended with status "${job.status}".`,
+				{ jobId },
+			);
 		},
 	};
 
-	async #start(id: string, input: unknown, opts: RunOptions): Promise<Started> {
-		const response = await this.#request(
-			"POST",
-			`/v1/capabilities/${encodeURIComponent(id)}`,
-			{
-				body: input ?? {},
-				...(opts.idempotencyKey !== undefined
-					? { idempotencyKey: opts.idempotencyKey }
-					: {}),
-				headers: priceHeaders(opts),
-				// Only read_only calls are retried; external_* (and unknown ids) never are.
-				retry: this.info(id)?.effectClass === "read_only",
+	/**
+	 * Runs `llm.chat` and yields the reply as it is generated (PRA-10). The last event is
+	 * `done`, with the same result the plain call returns. A failure, before or during the
+	 * stream, throws a PramaanError. A capability that does not stream, and a replayed
+	 * Idempotency-Key, yield one `done`. Never retried: a retry would generate, and
+	 * charge, a second reply.
+	 */
+	async *llmChatStream(
+		input: unknown,
+		opts: RunOptions = {},
+	): AsyncGenerator<LlmChatStreamEvent> {
+		let failure: PramaanError | undefined;
+		const client = new PublishedPramaan({
+			...this.#sdkOptions,
+			maxRetries: 0,
+			fetch: async (url, init) => {
+				const response = await this.#fetch(url, init);
+				if (!response.ok) failure = await errorFromResponse(response.clone());
+				return response;
 			},
-		);
-		return response.status === 202
-			? { job: toJob(response.body, id) }
-			: { result: response.body };
-	}
-
-	async #request(
-		method: "GET" | "POST",
-		path: string,
-		options: {
-			body?: unknown;
-			idempotencyKey?: string;
-			headers?: Record<string, string>;
-			retry?: boolean;
-		},
-	): Promise<ApiResponse> {
-		const headers: Record<string, string> = {
-			...options.headers,
-			Authorization: `Bearer ${this.#apiKey}`,
-			Accept: "application/json",
-		};
-		if (options.body !== undefined)
-			headers["Content-Type"] = "application/json";
-		// The same key on every attempt, so a retry can never run the call twice.
-		if (options.idempotencyKey !== undefined)
-			headers["Idempotency-Key"] = options.idempotencyKey;
-		const init: RequestInit = {
-			method,
-			headers,
-			...(options.body !== undefined
-				? { body: JSON.stringify(options.body) }
-				: {}),
-		};
-
-		let previous: PramaanError | undefined;
-		for (let attempt = 0; ; attempt++) {
-			let error: PramaanError;
-			let retryAfterMs: number | undefined;
-			try {
-				const response = await this.#fetch(`${this.#baseUrl}${path}`, init);
-				if (response.ok) {
-					return { status: response.status, body: await readBody(response) };
-				}
-				error = await errorFromResponse(response);
-				const after = Number(response.headers.get("retry-after"));
-				if (Number.isFinite(after) && after > 0) retryAfterMs = after * 1000;
-			} catch (thrown) {
-				if (thrown instanceof PramaanError) throw thrown;
-				error = new PramaanError(
-					"upstream_unavailable",
-					"Could not reach the Pramaan API.",
-					{
-						retryable: true,
-					},
-				);
-			}
-			// A retry with the same Idempotency-Key can meet the first attempt's still-held
-			// reservation (409, retryable). The first failure is the real answer, so report that.
-			if (previous && error.code === "conflict" && error.retryable)
-				throw previous;
-			previous = error;
-			const transient =
-				error.status === undefined ||
-				error.status === 429 ||
-				error.status >= 500;
-			if (!options.retry || !transient || attempt >= this.#maxRetries)
-				throw error;
-			await this.#sleep(
-				retryAfterMs ??
-					Math.min(
-						RETRY_BASE_MS * 2 ** attempt + Math.random() * 100,
-						RETRY_MAX_MS,
-					),
-			);
+		});
+		try {
+			yield* client.stream("llm.chat", input as never, opts);
+		} catch (error) {
+			throw failure ?? error;
 		}
 	}
 }
 
-/** The per-call price limit and second-opinion options as request headers. */
-function priceHeaders(opts: RunOptions): Record<string, string> {
+type Raw = Record<string, unknown>;
+
+export function toOutcomeRun(body: unknown): OutcomeRun {
+	const raw = (body ?? {}) as Raw;
+	const cost = (raw.cost ?? {}) as Raw;
+	if (typeof raw.outcome !== "string" || typeof raw.status !== "string") {
+		throw new PramaanError(
+			"internal",
+			"The API returned an unexpected run shape.",
+		);
+	}
 	return {
-		...(opts.maxPriceMicro !== undefined
-			? { "Pramaan-Max-Price-Micro": String(opts.maxPriceMicro) }
+		outcome: raw.outcome,
+		version: Number(raw.version ?? 1),
+		plan: String(raw.plan),
+		status: raw.status as OutcomeRun["status"],
+		...(typeof raw.completeness === "string"
+			? {
+					completeness: raw.completeness as NonNullable<
+						OutcomeRun["completeness"]
+					>,
+				}
 			: {}),
-		...(opts.secondOpinion ? { "Pramaan-Second-Opinion": "true" } : {}),
+		...("result" in raw ? { result: raw.result } : {}),
+		evidence: (raw.evidence ?? {}) as Record<string, unknown>,
+		missing: (raw.missing ?? []) as unknown[],
+		steps: ((raw.steps ?? []) as Raw[]).map(
+			(step): OutcomeRunStep => ({
+				id: String(step.id),
+				label: String(step.label),
+				capability: String(step.capability),
+				effectClass: step.effect_class as OutcomeRunStep["effectClass"],
+				status: String(step.status) as OutcomeRunStep["status"],
+				calls: Number(step.calls ?? 0),
+				effect: String(step.effect) as OutcomeRunStep["effect"],
+				...(typeof step.reason === "string" ? { reason: step.reason } : {}),
+				...(Array.isArray(step.errors)
+					? { errors: step.errors as NonNullable<OutcomeRunStep["errors"]> }
+					: {}),
+			}),
+		),
+		...(raw.error
+			? { error: raw.error as NonNullable<OutcomeRun["error"]> }
+			: {}),
+		cost: {
+			holdMicro: Number(cost.hold_micro ?? 0),
+			chargedMicro: Number(cost.charged_micro ?? 0),
+			capabilities: ((cost.capabilities ?? []) as Raw[]).map((row) => ({
+				id: String(row.id),
+				calls: Number(row.calls ?? 0),
+				chargedMicro: Number(row.charged_micro ?? 0),
+			})),
+		},
 	};
 }

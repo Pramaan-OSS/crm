@@ -35,8 +35,8 @@ export function SocialSignIn({ provider }: { provider: MailboxProviderId }) {
 
 		const origin = window.location.origin;
 
-		const { error } = await signIn.social({
-			provider,
+		const { error } = await signIn.oauth2({
+			providerId: provider,
 			callbackURL: `${origin}/`,
 			errorCallbackURL: `${origin}/sign-in`,
 		});
