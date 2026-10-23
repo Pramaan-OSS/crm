@@ -36,7 +36,7 @@ export type CompanyResearchAttempt =
 			readonly plan: string;
 			readonly priceMinMicro: number;
 			readonly priceMaxMicro: number;
- readonly priceTypicalMicro?: number;
+			readonly priceTypicalMicro?: number;
 			readonly summary: string;
 			readonly retryToken?: string;
 	  }
@@ -48,7 +48,7 @@ export type CompanyResearchAttempt =
 				readonly plan: string;
 				readonly priceMinMicro: number;
 				readonly priceMaxMicro: number;
- readonly priceTypicalMicro?: number;
+				readonly priceTypicalMicro?: number;
 				readonly chargedMicro: number;
 				readonly completeness: string;
 				readonly retryAvailable: boolean;
@@ -100,7 +100,9 @@ function briefFromResult(
 	// The platform does not check that news is about the company, so keep only
 	// items whose title or summary names it.
 	// ponytail: plain name match; swap for the platform's relevance check when it lands.
-	const companyName = (asString(raw.name) ?? asString(profile.name))?.toLowerCase();
+	const companyName = (
+		asString(raw.name) ?? asString(profile.name)
+	)?.toLowerCase();
 	const aboutCompany = (items: unknown) =>
 		Array.isArray(items) && companyName
 			? items.filter((item) => {
@@ -269,10 +271,12 @@ async function performCompanyResearch(
 			plan: estimate.plan,
 			priceMinMicro: estimate.priceMinMicro,
 			priceMaxMicro: estimate.priceMaxMicro,
- priceTypicalMicro: estimate.priceTypicalMicro,
+			priceTypicalMicro: estimate.priceTypicalMicro,
 			summary:
 				`Platform research runs ${estimate.steps.length} step(s) — ${steps} — ` +
-				(estimate.priceTypicalMicro !== undefined ? `usually about ${microDollars(estimate.priceTypicalMicro)} (at most ${microDollars(estimate.priceMaxMicro)}). ` : `for an estimated ${microDollars(estimate.priceMinMicro)}–${microDollars(estimate.priceMaxMicro)}. `) +
+				(estimate.priceTypicalMicro !== undefined
+					? `usually about ${microDollars(estimate.priceTypicalMicro)} (at most ${microDollars(estimate.priceMaxMicro)}). `
+					: `for an estimated ${microDollars(estimate.priceMinMicro)}–${microDollars(estimate.priceMaxMicro)}. `) +
 				`Call again with confirm: true and plan: "${estimate.plan}" once the person agrees.`,
 		};
 	}
@@ -323,7 +327,7 @@ async function performCompanyResearch(
 				plan: run.plan,
 				priceMinMicro: estimate.priceMinMicro,
 				priceMaxMicro: estimate.priceMaxMicro,
- priceTypicalMicro: estimate.priceTypicalMicro,
+				priceTypicalMicro: estimate.priceTypicalMicro,
 				chargedMicro: run.cost.chargedMicro,
 				completeness: run.completeness ?? "complete",
 				retryAvailable: run.steps.some((step) => step.status === "failed"),
@@ -365,7 +369,8 @@ async function performCompanyResearch(
 		) {
 			return {
 				via: "result-unknown",
-				reason: "Result unknown — the run may have started; check before retrying",
+				reason:
+					"Result unknown — the run may have started; check before retrying",
 			};
 		}
 		return {

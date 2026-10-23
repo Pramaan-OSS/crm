@@ -1,5 +1,5 @@
-import { companyLogoProps } from "@crm/db/images";
 import type { Db, Prisma } from "@crm/db";
+import { companyLogoProps } from "@crm/db/images";
 import { ENRICHMENT_PAGE, pageSize } from "@crm/validation/enrichment-queue";
 import { Injectable } from "@nestjs/common";
 import { InjectDatabase } from "../database/database.constants";

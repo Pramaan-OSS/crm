@@ -13,10 +13,10 @@ import {
 	Cap,
 	type Caps,
 	type LlmChatStreamEvent,
+	normalizeJsonSchema,
 	type Pramaan,
 } from "@crm/pramaan";
 import { z } from "zod";
-import { normalizeJsonSchema } from "@crm/pramaan";
 
 export interface PramaanChatModelOptions {
 	/** The shared Pramaan client (a null install never constructs this model). */
@@ -29,13 +29,14 @@ export interface PramaanChatModelOptions {
 	readonly waitForRateLimit?: WaitForModel;
 }
 
-import { requireCompleteReply, modelConfigurationError } from "./model-reply";
-import { researchStepMaxTokens } from "./research-step";
 import {
+	type WaitForModel,
 	withModelRateLimit,
 	withStreamRateLimit,
-	type WaitForModel,
 } from "./model-rate-limit";
+import { modelConfigurationError, requireCompleteReply } from "./model-reply";
+import { researchStepMaxTokens } from "./research-step";
+
 const LLM_CHAT_MAX_TOOLS = 64;
 const LLM_CHAT_MAX_MESSAGES = 500;
 

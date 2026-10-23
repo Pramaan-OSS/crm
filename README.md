@@ -1,3 +1,5 @@
+[![CI](https://github.com/Pramaan-OSS/pramaan-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/Pramaan-OSS/pramaan-crm/actions/workflows/ci.yml)
+
 <h1 align="center">Agentic CRM</h1>
 
 <p align="center">

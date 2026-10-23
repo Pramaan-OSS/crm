@@ -5,10 +5,10 @@ import { Spinner } from "@crm/ui/components/spinner";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { RecommendedApps } from "@/components/connections/recommended-apps";
 import { requireSession } from "@/lib/session";
 import { getServerQueryClient, getServerTrpc } from "@/lib/trpc/server";
 import { AddConnectionDialog } from "./add-connection-dialog";
-import { RecommendedApps } from "@/components/connections/recommended-apps";
 
 export const metadata: Metadata = { title: "Connections" };
 

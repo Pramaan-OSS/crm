@@ -10,10 +10,7 @@ const summary = {
 	durationMs: 5,
 };
 
-function fixture({
-	disabled = false,
-	delay = 0,
-} = {}) {
+function fixture({ disabled = false, delay = 0 } = {}) {
 	const calls: number[] = [];
 	const sync = {
 		runDue: async () => {
@@ -25,10 +22,7 @@ function fixture({
 	const config = {
 		get: (_key: string, _opts?: unknown) => (disabled ? "off" : undefined),
 	};
-	const scheduler = new SyncSchedulerService(
-		sync as never,
-		config as never,
-	);
+	const scheduler = new SyncSchedulerService(sync as never, config as never);
 	return { scheduler, calls };
 }
 
@@ -65,12 +59,12 @@ describe("the built-in sync scheduler", () => {
 
 // ── runForUser (real database, no live sync services wired) ────────────────
 import { db } from "@crm/db";
-import { MailboxSyncService } from "../src/sync/mailbox-sync.service";
-import { SyncStateService } from "../src/mailbox/sync-state.service";
-import { GoogleSyncService } from "../src/google/google-sync.service";
-import { MicrosoftSyncService } from "../src/microsoft/microsoft-sync.service";
 import { GoogleConnectionService } from "../src/google/google-connection.service";
+import { GoogleSyncService } from "../src/google/google-sync.service";
+import { SyncStateService } from "../src/mailbox/sync-state.service";
 import { MicrosoftConnectionService } from "../src/microsoft/microsoft-connection.service";
+import { MicrosoftSyncService } from "../src/microsoft/microsoft-sync.service";
+import { MailboxSyncService } from "../src/sync/mailbox-sync.service";
 
 describe("runForUser (integration)", () => {
 	const userId = `qa-sync-user-${Date.now()}`;
@@ -87,12 +81,16 @@ describe("runForUser (integration)", () => {
 	);
 
 	afterEach(async () => {
-		await db.$executeRawUnsafe(
-			`DELETE FROM "mailboxSync" WHERE "userId" IN ('${userId}', '${otherId}')`,
-		).catch(() => {});
-		await db.$executeRawUnsafe(
-			`DELETE FROM "user" WHERE id IN ('${userId}', '${otherId}')`,
-		).catch(() => {});
+		await db
+			.$executeRawUnsafe(
+				`DELETE FROM "mailboxSync" WHERE "userId" IN ('${userId}', '${otherId}')`,
+			)
+			.catch(() => {});
+		await db
+			.$executeRawUnsafe(
+				`DELETE FROM "user" WHERE id IN ('${userId}', '${otherId}')`,
+			)
+			.catch(() => {});
 	});
 
 	it("syncs only due rows for one rep", async () => {

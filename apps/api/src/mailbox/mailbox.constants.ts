@@ -23,7 +23,12 @@ export {
 	SYNC_SCOPES,
 } from "@crm/auth";
 
-export const SYNC_SOURCES = ["calendar", "gmail", "outlook", "outlook_calendar"] as const;
+export const SYNC_SOURCES = [
+	"calendar",
+	"gmail",
+	"outlook",
+	"outlook_calendar",
+] as const;
 export type SyncSource = (typeof SYNC_SOURCES)[number];
 
 export const GOOGLE_SYNC_SOURCES = ["calendar", "gmail"] as const;

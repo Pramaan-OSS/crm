@@ -197,6 +197,7 @@ describe("createPramaanChatModel", () => {
 	test("an unavailable stream before its first piece never resends the model call", async () => {
 		const fake = new FakePramaan();
 		fake.routeStream(async function* () {
+			yield* [];
 			const error = new Error("Model service unavailable");
 			(error as { code?: string }).code = "upstream_unavailable";
 			throw error;

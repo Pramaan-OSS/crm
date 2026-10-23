@@ -1,7 +1,7 @@
 import { defineAgent } from "eve";
 import { z } from "zod";
-import { normalizedAuthoredSchema } from "../../lib/registered-tools";
 import { agentModel } from "../../lib/model";
+import { normalizedAuthoredSchema } from "../../lib/registered-tools";
 
 export default defineAgent({
 	description:

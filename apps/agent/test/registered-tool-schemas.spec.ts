@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
-	registeredTools,
 	normalizedAuthoredSchema,
+	registeredTools,
 } from "../agent/lib/registered-tools";
 
 const allowed = new Set([

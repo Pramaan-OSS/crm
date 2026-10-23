@@ -1,15 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { FakePramaan } from "@crm/pramaan/fake";
-
+import {
+	companyResearchDefaultEstimate,
+	companyResearchPartialReport,
+} from "../../../packages/pramaan/test/fixtures/company-research-partial";
 import {
 	companyResearchOutcome,
 	formatOutcomeBrief,
 } from "../agent/lib/company-research";
-
-import {
-	companyResearchPartialReport,
-	companyResearchDefaultEstimate,
-} from "../../../packages/pramaan/test/fixtures/company-research-partial";
 
 const COMPANY = {
 	name: "Example Co",
@@ -595,7 +593,7 @@ test("failed step retries require a new approval even after a failed report", as
 	expect(fake.outcomeCalls.filter((c) => c.verb === "run")).toHaveLength(1);
 });
 
-	describe("fresh lookups on person-started runs", () => {
+describe("fresh lookups on person-started runs", () => {
 	test("a fresh session sends Pramaan-Fresh on the outcome run", async () => {
 		const opts: (Record<string, unknown> | undefined)[] = [];
 		const fake = new FakePramaan();
@@ -626,11 +624,22 @@ test("failed step retries require a new approval even after a failed report", as
 	});
 });
 
-for(const priceTypicalMicro of [undefined,0,2100]) test(`confirmation carries typical ${priceTypicalMicro}`,async()=>{
- const fake=availableFake();fake.routeOutcomes({estimate:()=>({...ESTIMATE,priceTypicalMicro})});
- const attempt=await companyResearchOutcome(fake,COMPANY);expect(attempt.via).toBe('needs-confirmation');
- if(attempt.via!=='needs-confirmation')throw new Error('Missing review');
- expect(attempt.priceMaxMicro).toBe(4200);expect(attempt.priceTypicalMicro).toBe(priceTypicalMicro);
- if(priceTypicalMicro===undefined)expect(attempt.summary).toContain('for an estimated');else expect(attempt.summary).toContain(`usually about $${(priceTypicalMicro/1_000_000).toFixed(6)} (at most $0.004200)`);
- expect(fake.outcomeCalls.some(call=>call.verb==='run')).toBe(false);
-});
+for (const priceTypicalMicro of [undefined, 0, 2100])
+	test(`confirmation carries typical ${priceTypicalMicro}`, async () => {
+		const fake = availableFake();
+		fake.routeOutcomes({
+			estimate: () => ({ ...ESTIMATE, priceTypicalMicro }),
+		});
+		const attempt = await companyResearchOutcome(fake, COMPANY);
+		expect(attempt.via).toBe("needs-confirmation");
+		if (attempt.via !== "needs-confirmation") throw new Error("Missing review");
+		expect(attempt.priceMaxMicro).toBe(4200);
+		expect(attempt.priceTypicalMicro).toBe(priceTypicalMicro);
+		if (priceTypicalMicro === undefined)
+			expect(attempt.summary).toContain("for an estimated");
+		else
+			expect(attempt.summary).toContain(
+				`usually about $${(priceTypicalMicro / 1_000_000).toFixed(6)} (at most $0.004200)`,
+			);
+		expect(fake.outcomeCalls.some((call) => call.verb === "run")).toBe(false);
+	});

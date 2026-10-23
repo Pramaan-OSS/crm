@@ -1,5 +1,4 @@
 "use client";
-import { ResearchEstimate } from "./research-estimate";
 
 import Checkmark from "@carbon/icons-react/es/Checkmark";
 import CircleDash from "@carbon/icons-react/es/CircleDash";
@@ -79,6 +78,7 @@ import {
 import { useTRPC } from "@/lib/trpc/client";
 import { useResearchStatus } from "@/lib/use-research-status";
 import { useRecordSheetView } from "./record-sheet/record-stack";
+import { ResearchEstimate } from "./research-estimate";
 
 /** How long a turn may sit with no message before it counts as never started. */
 const RUN_NEVER_STARTED_MS = 20_000;

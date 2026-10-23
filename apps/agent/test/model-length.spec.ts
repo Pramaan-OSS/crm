@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { FakePramaan } from "@crm/pramaan/fake";
 import { PramaanError } from "@crm/pramaan";
+import { FakePramaan } from "@crm/pramaan/fake";
 import { createPramaanChatModel } from "../agent/lib/pramaan-chat-model";
+
 const options = {
 	prompt: [{ role: "user", content: "Research this company." }],
 };
@@ -28,6 +29,7 @@ test("streamed length fails without releasing tool calls or structured text", as
 	for (const structured of [false, true]) {
 		const fake = new FakePramaan();
 		fake.routeStream(async function* () {
+			yield* [];
 			yield { type: "text_delta", text: '{"name":' };
 			yield {
 				type: "tool_call_start",
@@ -75,6 +77,7 @@ test("maxTokens refusal is a configuration error with no retry on either path", 
 		},
 	});
 	fake.routeStream(async function* () {
+		yield* [];
 		throw error;
 	});
 	const model = createPramaanChatModel({ pramaan: fake });

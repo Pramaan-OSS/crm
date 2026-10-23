@@ -1,10 +1,10 @@
 "use client";
 
-import { companyLogoProps } from "@crm/db/images";
 import Email from "@carbon/icons-react/es/Email";
 import Partnership from "@carbon/icons-react/es/Partnership";
 import Star from "@carbon/icons-react/es/Star";
 import type { FieldValueJson } from "@crm/db/fields";
+import { companyLogoProps } from "@crm/db/images";
 import {
 	Accordion,
 	AccordionContent,

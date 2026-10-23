@@ -161,7 +161,7 @@ export default defineTool({
 					summary: attempt.summary,
 					priceMinMicro: attempt.priceMinMicro,
 					priceMaxMicro: attempt.priceMaxMicro,
- priceTypicalMicro: attempt.priceTypicalMicro,
+					priceTypicalMicro: attempt.priceTypicalMicro,
 					...(attempt.retryToken ? { retryToken: attempt.retryToken } : {}),
 				};
 			}

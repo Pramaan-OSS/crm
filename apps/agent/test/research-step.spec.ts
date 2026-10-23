@@ -1,8 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import { FakePramaan } from "@crm/pramaan/fake";
-import { researchStepMaxTokens } from "../agent/lib/research-step";
 import { createPramaanChatModel } from "../agent/lib/pramaan-chat-model";
 import { readPublicPage } from "../agent/lib/read-public-page";
+import { researchStepMaxTokens } from "../agent/lib/research-step";
+
 const saved = process.env.RESEARCH_MAX_TOKENS;
 afterEach(() => {
 	if (saved === undefined) delete process.env.RESEARCH_MAX_TOKENS;

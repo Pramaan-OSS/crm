@@ -28,7 +28,13 @@
     "AGENT_BRIDGE_SECRET",
     "VERCEL",
     "VERCEL_GIT_COMMIT_SHA",
-    "RESEARCH_MAX_TOKENS"
+    "RESEARCH_MAX_TOKENS",
+    "PRAMAAN_FAKE",
+    "DO_NOT_TRACK",
+    "NEXT_TELEMETRY_DISABLED",
+    "TURBO_TELEMETRY_DISABLED",
+    "APP_URL",
+    "API_URL"
   ],
   "tasks": {
     "topo": {

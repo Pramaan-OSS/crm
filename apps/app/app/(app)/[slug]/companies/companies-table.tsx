@@ -1,7 +1,7 @@
 "use client";
 
-import { companyLogoProps } from "@crm/db/images";
 import Archive from "@carbon/icons-react/es/Archive";
+import { companyLogoProps } from "@crm/db/images";
 import { Button } from "@crm/ui/components/button";
 import {
 	DataTable,

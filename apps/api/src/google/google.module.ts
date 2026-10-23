@@ -1,7 +1,7 @@
-import { forwardRef } from "@nestjs/common";
-import { Module } from "@nestjs/common";
+import { forwardRef, Module } from "@nestjs/common";
 import { AgentModule } from "../agent/agent.module";
 import { MailboxModule } from "../mailbox/mailbox.module";
+import { SyncModule } from "../sync/sync.module";
 import { TrpcModule } from "../trpc/trpc.module";
 import { CalendarClient } from "./calendar.client";
 import { CalendarSyncService } from "./calendar-sync.service";
@@ -11,10 +11,14 @@ import { GmailSyncService } from "./gmail-sync.service";
 import { GoogleRouter } from "./google.router";
 import { GoogleConnectionService } from "./google-connection.service";
 import { GoogleSyncService } from "./google-sync.service";
-import { SyncModule } from "../sync/sync.module";
 
 @Module({
-	imports: [forwardRef(() => SyncModule), TrpcModule, MailboxModule, AgentModule],
+	imports: [
+		forwardRef(() => SyncModule),
+		TrpcModule,
+		MailboxModule,
+		AgentModule,
+	],
 	providers: [
 		CalendarClient,
 		CalendarSyncService,

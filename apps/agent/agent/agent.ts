@@ -2,8 +2,8 @@ import "@crm/env/load";
 
 import { defineAgent } from "eve";
 import { logCapabilities } from "./lib/capabilities";
-import { validateRegisteredToolSchemas } from "./lib/registered-tools";
 import { agentModel } from "./lib/model";
+import { validateRegisteredToolSchemas } from "./lib/registered-tools";
 
 validateRegisteredToolSchemas();
 void logCapabilities();

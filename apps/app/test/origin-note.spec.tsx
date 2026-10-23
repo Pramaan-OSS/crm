@@ -31,16 +31,16 @@ describe("originNote", () => {
 	});
 
 	it("fires for a host mismatch too, not just a port", () => {
-		expect(originNote("http://127.0.0.1:3000", "http://localhost:3000")).toContain(
-			"127.0.0.1:3000",
-		);
+		expect(
+			originNote("http://127.0.0.1:3000", "http://localhost:3000"),
+		).toContain("127.0.0.1:3000");
 	});
 });
 
 describe("OriginNote", () => {
 	it("renders nothing on the server, so hydration starts clean", () => {
-		expect(renderToStaticMarkup(<OriginNote appUrl="http://localhost:3000" />)).toBe(
-			"",
-		);
+		expect(
+			renderToStaticMarkup(<OriginNote appUrl="http://localhost:3000" />),
+		).toBe("");
 	});
 });

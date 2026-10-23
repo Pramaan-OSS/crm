@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { PramaanError, createPramaan } from "@crm/pramaan";
+import { createPramaan, PramaanError } from "@crm/pramaan";
 import { FakePramaan } from "@crm/pramaan/fake";
 import { createPramaanChatModel } from "../agent/lib/pramaan-chat-model";
 
@@ -53,6 +53,7 @@ for (const streamed of [false, true]) {
 			},
 		});
 		fake.routeStream(async function* () {
+			yield* [];
 			throw limited();
 		});
 		const model = createPramaanChatModel({
