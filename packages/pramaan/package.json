@@ -18,7 +18,7 @@
 		"typescript": "5.9.2"
 	},
 	"dependencies": {
-		"@pramaan/sdk": "0.1.0",
+		"@pramaan/sdk": "0.1.4",
 		"zod": "^4.4.3"
 	}
 }

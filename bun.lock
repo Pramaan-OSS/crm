@@ -171,7 +171,7 @@
       "name": "@crm/pramaan",
       "version": "0.0.1",
       "dependencies": {
-        "@pramaan/sdk": "0.1.0",
+        "@pramaan/sdk": "0.1.4",
         "zod": "^4.4.3",
       },
       "devDependencies": {
@@ -722,7 +722,7 @@
 
     "@playwright/test": ["@playwright/test@1.64.0", "", { "dependencies": { "playwright": "1.64.0" }, "bin": { "playwright": "cli.js" } }, "sha512-oTN9FNYuN6bqQMwiho6jJKLCG2/QOYCixGXuCjRmzOq23eODeukuY2XiAVoVpAECbuezMt1MHQjAiQxK8F+Y+g=="],
 
-    "@pramaan/sdk": ["@pramaan/sdk@0.1.0", "", {}, "sha512-lG2XvH/r6XPvorhzhzsWZuniuKbLePT69UbUnpVkev7n0s4Zh+9Y0URkV0/cG1chcrcGerHhtHLbsMApFUfpsw=="],
+    "@pramaan/sdk": ["@pramaan/sdk@0.1.4", "", {}, "sha512-Ty0DDPsfVntRYTOkYYqkj0xn8qEHmvlZf3UDhGABpo9NbeF039PNFU+uSZd6Fw+IPwLLtDh3VBL/0h5syvcNqQ=="],
 
     "@prisma/adapter-pg": ["@prisma/adapter-pg@7.9.1", "", { "dependencies": { "@prisma/driver-adapter-utils": "7.9.1", "@types/pg": "^8.16.0", "pg": "^8.16.3", "postgres-array": "3.0.4" } }, "sha512-Ho2RK1KanQxLNSC0sR5bpiiVep10sWPLXCcxK+KXfI/Q69TMRbiafSvLPv3V9snimX72rMCqGlyJ4sBO4lKTAw=="],
 

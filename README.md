@@ -96,7 +96,7 @@ Without a key, action search explains what to configure and stays disabled.
 ## The Pramaan client
 
 `packages/pramaan` is the one module that talks to the platform and reads
-`PRAMAAN_API_KEY`. It imports the published `@pramaan/sdk@0.1.0` package.
+`PRAMAAN_API_KEY`. It imports the published `@pramaan/sdk@0.1.4` package.
 Product helpers and the fake client stay local; `src/sdk` keeps only compatibility
 code for freshness headers, cancellation, retry metadata and accepted research reports.
 
