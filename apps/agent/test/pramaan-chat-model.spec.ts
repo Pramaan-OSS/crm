@@ -72,7 +72,7 @@ describe("createPramaanChatModel", () => {
 		};
 		const input = fake.calls[0]?.input as ChatRequest;
 		expect(input["model"]).toBe("best");
-		expect(input["maxTokens"]).toBe(1024);
+		expect(input["maxTokens"]).toBe(2048);
 
 		// A session budget larger than the step ceiling must not raise the
 		// reservation: the platform prices the worst case from this field.
@@ -83,7 +83,7 @@ describe("createPramaanChatModel", () => {
 		});
 		void big;
 		const bigInput = fake.calls[fake.calls.length - 1]?.input as ChatRequest;
-		expect(bigInput["maxTokens"]).toBe(1024);
+		expect(bigInput["maxTokens"]).toBe(4096);
 		const messages = input["messages"];
 		expect(messages).toEqual([
 			{ role: "system", content: "You are the research agent." },

@@ -3,6 +3,8 @@ import { mirror, storageEnabled } from "@crm/db/blob";
 import { COMPANY_IMAGE_FIELDS } from "@crm/db/images";
 import { z } from "zod";
 
+import { pramaan } from "./pramaan";
+
 const mirrorableUrl = z.string().regex(/\S/).nullable().catch(null);
 
 export async function mirrorBrandImages(
@@ -18,7 +20,11 @@ export async function mirrorBrandImages(
 			const source = mirrorableUrl.parse(update[slot]);
 			if (!source) return;
 
-			const stored = await mirror(source, `companies/${companyId}/${slot}`);
+			const stored = await mirror(
+				source,
+				`companies/${companyId}/${slot}`,
+				pramaan(),
+			);
 			if (!stored || stored === source) return;
 
 			update[slot] = stored;

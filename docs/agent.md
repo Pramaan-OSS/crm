@@ -15,12 +15,13 @@ The agent's generation runs on the platform's `llm.chat` capability through the
 Pramaan client; the platform picks the provider. This template never names a
 model or a provider, and there is no model setting. Without a
 `PRAMAAN_API_KEY`, agent turns fail with a message asking the workspace owner
-to set one. Each step defaults to at most 1,024 output tokens.
+to set one. Each step defaults to at most 4,096 output tokens.
 `RESEARCH_MAX_TOKENS` sets the ceiling for both streamed and whole replies, from
 64 to 8,192. A short step can request fewer tokens within those bounds. Failed
 company research closes its earlier outstanding brand task and remains retryable.
 A retryable rate-limit refusal can honour server `Retry-After` up to twice per
-step, at most 60 seconds each, before stream data arrives. Unavailable or uncertain
+request, at most 60 seconds each, before stream data arrives. The same wait covers
+tool capabilities, outcomes, estimates and job reads through the shared transport. Unavailable or uncertain
 answers never retry automatically; longer or missing delays remain failures.
 
 ## Pictures are copied, never linked
@@ -712,3 +713,28 @@ script did not create.
 **`taskFromToken` keys on the `task:` marker, not a fixed prefix**
 (`test/crm-token.spec.ts`). **A channel handler must not assume the token it receives
 is byte-identical to the one it sent.**
+
+## Saved sessions and spending
+
+Start with `bun run --cwd apps/agent dev` or `bun run --cwd apps/agent start`.
+These commands resolve the database before starting Eve and check its local queue.
+An existing queue with no scope marker, a different database address or a marker
+older than `AGENT_MAX_SESSION_AGE_MS` stops startup. The default age is one hour.
+The check never edits `.eve/`. Ask the supervisor to review and archive an old
+queue before starting fresh; never stamp an old queue as trusted. This deliberately
+blocks the whole local queue when its origin or age is uncertain. Do not launch
+`eve dev` or `eve start` directly, as that bypasses the startup check.
+
+Each new session saves its database fingerprint, creation time and spend ceiling.
+Legacy, mismatched and expired sessions cannot make calls. `AGENT_MAX_SPEND_MICRO`
+defaults to 100000 micro-USD (one million units per dollar). Before every paid capability or outcome, the client
+gets a fresh estimate, reserves its maximum in `.runtime/agent-spend/`, and pins the
+capability's price ceiling or outcome's approved plan. Calls needing approval still
+need the original approval. Reservations remain after failures or uncertain results;
+a restart cannot restore the allowance. Parallel calls share a locked ledger.
+Direct background tasks retain the same allowance when leased again.
+Keep `.runtime/` with `.eve/` across restarts, and use one shared runtime directory
+if running multiple processes for the same queue. A missing ledger for an existing
+session must not be treated as a fresh allowance. A lower configured cap takes effect
+immediately. Budget exhaustion stops further paid calls; review the run before
+starting another session. Runtime files are ignored by Git.

@@ -2,6 +2,7 @@ import { db } from "@crm/db";
 import { isMirrored, mirror, storageEnabled } from "@crm/db/blob";
 import { enabled, PEOPLE } from "./capabilities";
 import { findPortrait, type PortraitSource } from "./portrait-sources";
+import { pramaan } from "./pramaan";
 
 export type PortraitResult = {
 	stored: boolean;
@@ -65,7 +66,7 @@ export async function storePortrait({
 		};
 	}
 
-	const stored = await mirror(sourceUrl, `contacts/${contactId}`);
+	const stored = await mirror(sourceUrl, `contacts/${contactId}`, pramaan());
 
 	if (!stored) {
 		return {

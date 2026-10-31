@@ -4,6 +4,10 @@
 import "@crm/env/load";
 
 import { type Pramaan, pramaanFromEnv, pramaanKeySet } from "@crm/pramaan";
+import { directPaidRun } from "./direct-paid-run";
+import { paidRun } from "./paid-run";
+import { agentTransport } from "./pramaan-transport";
+import { reserveSpend, spendLedgerRoot } from "./run-safety";
 
 let client: Pramaan | null | undefined;
 
@@ -20,7 +24,13 @@ export function resetPramaanForTests(): void {
 export function pramaan(): Pramaan | null {
 	if (client !== undefined) return client;
 
-	client = pramaanFromEnv();
+	client = pramaanFromEnv({
+		fetch: agentTransport({
+			fetch: (url, init) => fetch(url, init),
+			run: () => directPaidRun.getStore() ?? paidRun.get(),
+			reserve: (run, amount) => reserveSpend(spendLedgerRoot(), run, amount),
+		}),
+	});
 
 	return client;
 }

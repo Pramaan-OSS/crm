@@ -1,4 +1,5 @@
 import { PramaanError } from "@crm/pramaan";
+import { exhaustedRateLimit } from "./rate-limit-exhausted";
 
 export type WaitForModel = (milliseconds: number) => Promise<void>;
 const MAX_WAITS = 2;
@@ -8,6 +9,7 @@ const sleep: WaitForModel = (milliseconds) =>
 
 function waitTime(error: unknown, waits: number): number | null {
 	if (
+		exhaustedRateLimit(error) ||
 		!(error instanceof PramaanError) ||
 		error.code !== "rate_limited" ||
 		!error.retryable ||

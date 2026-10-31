@@ -133,6 +133,6 @@ This template is a rewired copy of [Comp AI's CRM](https://github.com/trycompai/
 (MIT), reworked so every outside call runs through Pramaan. The original project's
 licence text is preserved in [`LICENSE-ORIGINAL`](./LICENSE-ORIGINAL).
 
-Research steps default to a ceiling of 1,024 output tokens. Set `RESEARCH_MAX_TOKENS`
+Research steps default to a ceiling of 4,096 output tokens. Set `RESEARCH_MAX_TOKENS`
 to a whole number from 64 to 8,192 to adjust it; larger limits allow more spending
 on each step. Failed research remains visible and can be retried explicitly.

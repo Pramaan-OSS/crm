@@ -31,7 +31,7 @@ export {
 	PramaanClient,
 	type PramaanOptions,
 } from "./sdk/client";
-export { type ErrorCode, PramaanError } from "./sdk/errors";
+export { type ErrorCode, errorFromResponse, PramaanError } from "./sdk/errors";
 export type {
 	CapabilityDescription,
 	CapabilityInfo,
@@ -534,7 +534,11 @@ export function createPramaan(options: {
  * API, agent, auth, storage — gets its client (or its answer about whether one is
  * configured) from here, so the key is read in exactly one module.
  */
-export function pramaanFromEnv(): Pramaan | null {
+export function pramaanFromEnv(
+	options: {
+		fetch?: (input: string, init: RequestInit) => Promise<Response>;
+	} = {},
+): Pramaan | null {
 	const apiKey = process.env.PRAMAAN_API_KEY?.trim();
 	if (!apiKey) return null;
 	if (process.env.PRAMAAN_FAKE?.trim() === "1") {
@@ -551,6 +555,7 @@ export function pramaanFromEnv(): Pramaan | null {
 		);
 	}
 	return createPramaan({
+		fetch: options.fetch,
 		apiKey,
 		baseUrl: process.env.PRAMAAN_BASE_URL?.trim() || undefined,
 	});

@@ -14,8 +14,13 @@ export function modelConfigurationError(error: unknown): unknown {
 	)
 		return new PramaanError(
 			"invalid_request",
-			"The reply limit is too small to produce an answer. Ask your administrator to increase the reply limit before retrying.",
-			{ status: 400, retryable: false },
+			`The reply limit is too small to produce an answer. Ask your administrator to increase the reply limit before retrying. ${error.message}${error.reason ? ` Reason: ${error.reason}.` : ""}${error.requestId ? ` Request: ${error.requestId}.` : ""}`,
+			{
+				status: error.status,
+				retryable: false,
+				requestId: error.requestId,
+				reason: error.reason,
+			},
 		);
 	return error;
 }

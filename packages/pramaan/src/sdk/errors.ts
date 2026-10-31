@@ -58,6 +58,8 @@ export class PramaanError extends SdkPramaanError {
 	) {
 		super(code, message, extras);
 		this.name = "PramaanError";
+		// The published constructor truncates at 200 characters, dropping server diagnostics.
+		this.message = message;
 		this.reason = extras.reason;
 		this.plan = extras.plan;
 		this.needs = extras.needs;

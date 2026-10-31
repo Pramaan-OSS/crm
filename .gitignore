@@ -48,3 +48,6 @@ yarn-error.log*
 
 # Local test-run artifacts
 .runtime/
+
+# Agent runtime sessions must never enter version control.
+apps/agent/.eve/

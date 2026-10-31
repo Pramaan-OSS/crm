@@ -69,7 +69,11 @@ test("maxTokens refusal is a configuration error with no retry on either path", 
 	const error = new PramaanError(
 		"invalid_request",
 		"maxTokens reached without output",
-		{ status: 400 },
+		{
+			status: 400,
+			requestId: "req_reply_limit",
+			reason: "maxTokens must allow a complete answer",
+		},
 	);
 	const fake = new FakePramaan({
 		"llm.chat": () => {
@@ -82,12 +86,22 @@ test("maxTokens refusal is a configuration error with no retry on either path", 
 	});
 	const model = createPramaanChatModel({ pramaan: fake });
 	await expect(model.doGenerate(options)).rejects.toThrow("administrator");
+	await expect(model.doGenerate(options)).rejects.toThrow("req_reply_limit");
+	await expect(model.doGenerate(options)).rejects.toThrow(
+		"maxTokens must allow a complete answer",
+	);
 	const { stream } = await model.doStream(options);
 	const parts = [];
 	for await (const part of stream) parts.push(part);
 	expect(parts.find((p) => p.type === "error")?.error.message).toContain(
 		"administrator",
 	);
-	expect(fake.calls).toHaveLength(1);
+	expect(parts.find((p) => p.type === "error")?.error.message).toContain(
+		"req_reply_limit",
+	);
+	expect(parts.find((p) => p.type === "error")?.error.message).toContain(
+		"maxTokens must allow a complete answer",
+	);
+	expect(fake.calls).toHaveLength(3);
 	expect(fake.streamCalls).toHaveLength(1);
 });

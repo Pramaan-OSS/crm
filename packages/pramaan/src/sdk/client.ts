@@ -79,7 +79,12 @@ export class PramaanClient {
 						)
 							return response;
 					} catch (error) {
-						if (!retry || attempt >= this.#maxRetries) throw error;
+						if (
+							error instanceof PramaanError ||
+							!retry ||
+							attempt >= this.#maxRetries
+						)
+							throw error;
 					}
 					await this.#sleep(
 						lastError?.retryAfterMs ??

@@ -117,7 +117,9 @@ what the platform serves.
 | `PRAMAAN_API_KEY` | Research, enrichment, picture storage, exchange rates, connected mailboxes |
 | `PRAMAAN_BASE_URL` | Only for a dev Pramaan API |
 | `PRAMAAN_STORAGE_BUCKET` | Where mirrored images land (default `crm`) |
-| `RESEARCH_MAX_TOKENS` | Ceiling per generation step, default 1024; whole number 64–8192 |
+| `RESEARCH_MAX_TOKENS` | Ceiling per generation step, default 4096; whole number 64–8192 |
+| `AGENT_MAX_SPEND_MICRO` | Positive whole number; maximum reserved cost per agent session, default 100000 micro units |
+| `AGENT_MAX_SESSION_AGE_MS` | Positive whole number; maximum saved queue/session age, default 3600000 (one hour) |
 | `AGENT_BRIDGE_SECRET` | The rep-facing Agent panel — see `agent.md` |
 
 ## Mailbox sync

@@ -9,8 +9,8 @@ afterEach(() => {
 	if (saved === undefined) delete process.env.RESEARCH_MAX_TOKENS;
 	else process.env.RESEARCH_MAX_TOKENS = saved;
 });
-test("step setting defaults to 1024 and refuses values outside platform bounds", () => {
-	expect(researchStepMaxTokens("")).toBe(1024);
+test("step setting defaults to 4096 and refuses values outside platform bounds", () => {
+	expect(researchStepMaxTokens("")).toBe(4096);
 	for (const value of ["63", "8193", "1.5", "invalid"])
 		expect(() => researchStepMaxTokens(value)).toThrow("RESEARCH_MAX_TOKENS");
 	expect(researchStepMaxTokens("64")).toBe(64);

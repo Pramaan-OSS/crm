@@ -1,6 +1,9 @@
+import "@crm/env/load";
 import { spawn } from "node:child_process";
 import { constants } from "node:os";
+import { resolve } from "node:path";
 import { ensureDatabaseUrl } from "@crm/db/managed";
+import { checkQueuedSessionScope } from "../agent/lib/run-safety";
 
 // When the person set no DATABASE_URL, use the managed database's saved
 // address (the API boot provisions and saves it; this is a no-op when it is
@@ -12,6 +15,11 @@ if (dbOutcome.managed) {
 	);
 }
 
+process.env.DATABASE_URL ??=
+	"postgresql://postgres:postgres@localhost:54329/crm?schema=public";
+checkQueuedSessionScope(resolve(import.meta.dirname, ".."));
+process.env.AGENT_RUNTIME_ROOT = resolve(import.meta.dirname, "../.runtime");
+
 const rawPort = process.env.AGENT_PORT ?? process.env.PORT ?? "2000";
 const port = Number(rawPort);
 
@@ -22,10 +30,15 @@ if (!Number.isInteger(port) || port < 1 || port > 65_535) {
 }
 
 const cli = process.platform === "win32" ? "eve.cmd" : "eve";
-const child = spawn(cli, ["start", "--port", String(port)], {
-	stdio: "inherit",
-	env: process.env,
-});
+const mode = process.argv.includes("--dev") ? "dev" : "start";
+const child = spawn(
+	cli,
+	[mode, ...(mode === "dev" ? ["--no-ui"] : []), "--port", String(port)],
+	{
+		stdio: "inherit",
+		env: process.env,
+	},
+);
 
 let settled = false;
 

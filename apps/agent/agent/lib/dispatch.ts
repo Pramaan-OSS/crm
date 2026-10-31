@@ -4,10 +4,12 @@ import { APP_AUTH, type AppAuth } from "./app-auth";
 import { brandOutcome, runBrand } from "./brand";
 import { queueEventAgentRuns } from "./custom-agent-dispatch";
 import { settledWithin } from "./deadline";
+import { withDirectPaidRun } from "./direct-paid-run";
 import { DISPATCH } from "./dispatch-config";
 import { markRunning, settle } from "./enrichment";
 import { collapsing, runLimited } from "./pool";
 import { runPortrait } from "./portrait";
+import { pramaanEnabled } from "./pramaan";
 import { staleTaskSweep } from "./stale-tasks";
 import {
 	claimDue,
@@ -100,6 +102,11 @@ async function reconcileDirect(
 }
 
 async function handleDirect(task: LeasedTask): Promise<void> {
+	if (!pramaanEnabled()) return executeDirect(task);
+	return withDirectPaidRun(task.id, () => executeDirect(task));
+}
+
+async function executeDirect(task: LeasedTask): Promise<void> {
 	if (task.kind === "brand" && task.companyId) {
 		const result = await runBrand({ companyId: task.companyId });
 		if (result.retryable) return;

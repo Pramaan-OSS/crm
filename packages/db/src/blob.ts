@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { pramaanKeySet } from "@crm/pramaan";
+import { type Pramaan, pramaanKeySet } from "@crm/pramaan";
 import { isMirrored } from "./images";
 import { safeFetch } from "./safe-fetch";
 
@@ -46,6 +46,7 @@ export function storageEnabled(): boolean {
 export async function mirror(
 	sourceUrl: string,
 	prefix: string,
+	client?: Pramaan | null,
 ): Promise<string | null> {
 	if (!storageEnabled()) return null;
 	if (isMirrored(sourceUrl)) return sourceUrl;
@@ -70,7 +71,7 @@ export async function mirror(
 		const path = `${prefix}-${digest}.${extension}`;
 
 		const { pramaanFromEnv, idempotencyKey } = await import("@crm/pramaan");
-		const api = pramaanFromEnv();
+		const api = client === undefined ? pramaanFromEnv() : client;
 		if (!api) return null;
 
 		const upload = await api.storageUploadUrl(

@@ -115,7 +115,7 @@ test("the first company step has no shell/file tools or todo and stays within re
 			maxTokens: number;
 		};
 		expect(input.tools).toHaveLength(32);
-		expect(input.maxTokens).toBe(1024);
+		expect(input.maxTokens).toBe(4096);
 		const schemaBytes = input.tools.reduce(
 			(total, tool) =>
 				total + Buffer.byteLength(JSON.stringify(tool.parameters)),
